@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "530402102237",
+    "project_id": "edumate-college",
+    "storage_bucket": "edumate-college.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:530402102237:android:6d32703c1261f49ea10434",
+        "android_client_info": {
+          "package_name": "com.example.edumate"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "530402102237-27tfrkbqpcpa5jfiu3unel7td07re9lt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJoI0ZRHGMM6d8E_zWBqLIFSJH8EB8ehE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "530402102237-27tfrkbqpcpa5jfiu3unel7td07re9lt.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "530402102237-j97park63bs1q0u9l0rp1jlrsb5ups4b.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.edumate"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
