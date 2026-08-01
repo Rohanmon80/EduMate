@@ -1,5 +1,5 @@
 import 'dart:ui';
-
+import '../../services/excel_subject_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -20,6 +20,8 @@ class _SubjectManagementPageState
 
   final SubjectService subjectService =
   SubjectService();
+  final ExcelSubjectService excelService =
+  ExcelSubjectService();
 
   final TextEditingController searchController =
   TextEditingController();
@@ -83,16 +85,6 @@ class _SubjectManagementPageState
               controller: searchController,
 
               decoration: InputDecoration(
-
-                prefixIcon:
-                const Icon(Icons.search),
-
-                hintText: "Search Subject",
-
-                filled: true,
-                fillColor: isDark
-                    ? Colors.white.withOpacity(.05)
-                    : Colors.white,
                 prefixIcon: const Icon(Icons.search),
                 hintText: "Search Subject",
                 border: OutlineInputBorder(
@@ -116,51 +108,45 @@ class _SubjectManagementPageState
             const SizedBox(height: 20),
 
             Row(
-
               children: [
 
                 Expanded(
-
                   child: ElevatedButton.icon(
-
-                    icon:
-                    const Icon(Icons.add),
-
-                    label:
-                    const Text("Add Subject"),
-
+                    icon: const Icon(Icons.add),
+                    label: const Text("Add"),
                     onPressed: () {
-
                       showDialog(
-
                         context: context,
-
-                        builder: (_) =>
-                        const AddSubjectDialog(),
-
+                        builder: (_) => const AddSubjectDialog(),
                       );
-
                     },
                   ),
                 ),
 
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
 
                 Expanded(
-
                   child: ElevatedButton.icon(
-
-                    icon:
-                    const Icon(Icons.upload),
-
-                    label:
-                    const Text("Import Excel"),
-
-                    onPressed: () {
-
+                    icon: const Icon(Icons.download),
+                    label: const Text("Template"),
+                    onPressed: () async {
+                      await excelService.downloadTemplate();
                     },
                   ),
                 ),
+
+                const SizedBox(width: 10),
+
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text("Import"),
+                    onPressed: () {
+                      // TODO: Import Excel
+                    },
+                  ),
+                ),
+
               ],
             ),
             const SizedBox(height: 20),

@@ -7,7 +7,7 @@ import '../../services/firestore_service.dart';
 import '../../timetables/timetable_upload_page.dart';
 import 'admin_analytics_page.dart';
 import 'admin_pending_fees_page.dart';
-
+import 'subject_management_page.dart';
 import 'admin_notices_page.dart';
 
 class AdminDashboardPage extends StatelessWidget {
@@ -844,6 +844,21 @@ class AdminDashboardPage extends StatelessWidget {
                               (_)=>
 
                           const AdminNoticesPage(),
+                        ),
+                      );
+                    },
+                  ),
+
+                  moduleCard(
+                    context,
+                    "Subjects",
+                    Icons.menu_book,
+                    Colors.deepPurple,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SubjectManagementPage(),
                         ),
                       );
                     },
