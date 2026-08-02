@@ -21,17 +21,7 @@ class ExcelSubjectService {
       TextCellValue("Regulation"),
     ]);
 
-    Directory? dir;
-
-    if (Platform.isAndroid) {
-      dir = Directory('/storage/emulated/0/Download');
-    } else {
-      dir = await getDownloadsDirectory();
-    }
-
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
+    final dir = await getTemporaryDirectory();
 
     final file = File("${dir.path}/Subject_Template.xlsx");
 
@@ -73,6 +63,10 @@ class ExcelSubjectService {
     int count = 0;
 
     final firestore = FirebaseFirestore.instance;
+
+    if (excel.tables.isEmpty) {
+      return 0;
+    }
 
     final sheet = excel.tables.values.first;
 

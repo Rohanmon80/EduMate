@@ -1,7 +1,7 @@
 import 'dart:ui';
-
+import '../../services/subject_service.dart';
 import 'package:flutter/material.dart';
-
+import '../screens/edit_subject_page.dart';
 class SubjectCard extends StatelessWidget {
   final Map<String, dynamic> subject;
 
@@ -114,7 +114,23 @@ class SubjectCard extends StatelessWidget {
 
                     TextButton.icon(
 
-                      onPressed: () {},
+                      onPressed: () {
+
+                        Navigator.push(
+
+                          context,
+
+                          MaterialPageRoute(
+
+                            builder: (_) => EditSubjectPage(
+                              subject: subject,
+                            ),
+
+                          ),
+
+                        );
+
+                      },
 
                       icon: const Icon(
                         Icons.edit,
@@ -129,7 +145,53 @@ class SubjectCard extends StatelessWidget {
 
                     TextButton.icon(
 
-                      onPressed: () {},
+                      onPressed: () async {
+
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text("Delete Subject"),
+                            content: Text(
+                              "Delete ${subject["subjectName"]}?",
+                            ),
+                            actions: [
+
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.pop(context, false);
+                                },
+                                child: const Text("Cancel"),
+                              ),
+
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.pop(context, true);
+                                },
+                                child: const Text("Delete"),
+                              ),
+
+                            ],
+                          ),
+                        );
+
+                        if (confirm == true) {
+
+                          await SubjectService().deleteSubject(
+                            subject["subjectCode"],
+                          );
+
+                          if (context.mounted) {
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+
+                              const SnackBar(
+                                content: Text("Subject Deleted"),
+                              ),
+                            );
+                          }
+                        }
+
+                      },
 
                       icon: const Icon(
                         Icons.delete,

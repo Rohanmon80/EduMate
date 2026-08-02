@@ -130,13 +130,36 @@ class _SubjectManagementPageState
                     icon: const Icon(Icons.download),
                     label: const Text("Template"),
                     onPressed: () async {
-                      final path = await excelService.downloadTemplate();
+                      try {
+                        final path = await excelService.downloadTemplate();
+
+                        if (!mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text("Template saved\n$path"),
+                          ),
+                        );
+
+                      } catch (e) {
+
+                        if (!mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: Colors.red,
+                            content: Text(e.toString()),
+                          ),
+                        );
+                      }
 
                       if (!mounted) return;
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text("Template saved:\n$path"),
+                          content: const Text(
+                            "Template generated successfully.\nChoose 'Files' to save it to Downloads.",
+                          ),
                           duration: const Duration(seconds: 4),
                         ),
                       );

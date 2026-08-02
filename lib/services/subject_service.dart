@@ -16,7 +16,20 @@ class SubjectService {
     required String type,
     required String regulation,
   }) async {
-    await _firestore.collection(collection).doc(subjectCode).set({
+
+    final doc = await _firestore
+        .collection(collection)
+        .doc(subjectCode)
+        .get();
+
+    if (doc.exists) {
+      throw Exception("Subject Code already exists");
+    }
+
+    await _firestore
+        .collection(collection)
+        .doc(subjectCode)
+        .set({
       "subjectCode": subjectCode,
       "subjectName": subjectName,
       "department": department,
