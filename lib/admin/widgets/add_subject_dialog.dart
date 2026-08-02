@@ -256,6 +256,15 @@ class _AddSubjectDialogState
         ElevatedButton(
 
           onPressed: () async {
+            if (subjectCodeController.text.trim().isEmpty ||
+                subjectNameController.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Please enter Subject Code and Subject Name"),
+                ),
+              );
+              return;
+            }
 
             await service.addSubject(
 

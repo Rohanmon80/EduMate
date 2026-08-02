@@ -130,7 +130,18 @@ class _SubjectManagementPageState
                     icon: const Icon(Icons.download),
                     label: const Text("Template"),
                     onPressed: () async {
-                      await excelService.downloadTemplate();
+                      final path = await excelService.downloadTemplate();
+
+                      if (!mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Template saved:\n$path"),
+                          duration: const Duration(seconds: 4),
+                        ),
+                      );
+
+                      debugPrint("Template saved at: $path");
                     },
                   ),
                 ),
@@ -141,8 +152,38 @@ class _SubjectManagementPageState
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.upload_file),
                     label: const Text("Import"),
-                    onPressed: () {
-                      // TODO: Import Excel
+                    onPressed: () async {
+
+                      final total =
+                      await excelService.importSubjects();
+
+                      if (!mounted) return;
+
+                      if (total == 0) {
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+
+                          const SnackBar(
+                            backgroundColor: Colors.orange,
+                            content: Text(
+                              "No file selected or no subjects imported",
+                            ),
+                          ),
+                        );
+
+                      } else {
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+
+                          SnackBar(
+                            backgroundColor: Colors.green,
+                            content: Text(
+                              "$total subjects imported successfully",
+                            ),
+                          ),
+                        );
+
+                      }
                     },
                   ),
                 ),
