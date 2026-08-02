@@ -14,24 +14,14 @@ class TeacherMarksPage extends StatefulWidget {
 
 class _TeacherMarksPageState extends State<TeacherMarksPage> {
 
-  String year = "1st";
-
-  String department = "CSE";
-
-  String section = "A";
-
-  String semester = "1";
-
-  String exam = "Mid 1";
-
-  String subject = "";
-
   bool loading = false;
 
   List<DocumentSnapshot> students = [];
 
-  final subjectController =
-  TextEditingController();
+  String? selectedSubject;
+  String? selectedSubjectName;
+  String exam = "Mid 1";
+  final rollNumberController = TextEditingController();
   final ExcelService excelService = ExcelService();
 
   Map<String,
@@ -48,62 +38,36 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
     "Lab Internal 2",
     "Lab External",
   ];
+  Future<void> searchStudents() async {
+    if (loading) return;
 
-  Future<void>
-  searchStudents() async {
     setState(() {
       loading = true;
     });
 
-    final data =
-
-    await FirebaseFirestore
-        .instance
-        .collection(
-      "users",
-    )
-
+    final data = await FirebaseFirestore.instance
+        .collection("users")
+        .where("role", isEqualTo: "student")
         .where(
-      "role",
-      isEqualTo:
-      "student",
+      "rollNumber",
+      isEqualTo: rollNumberController.text.trim(),
     )
-
-        .where(
-      "year",
-      isEqualTo:
-      year,
-    )
-
-        .where(
-      "department",
-      isEqualTo:
-      department,
-    )
-
-        .where(
-      "section",
-      isEqualTo:
-      section,
-    )
-
-        .where(
-      "semester",
-      isEqualTo:
-      int.parse(
-        semester,
-      ),
-    )
-
         .get();
 
     setState(() {
-      students =
-          data.docs;
-
+      students = data.docs;
       loading = false;
     });
+
+    if (data.docs.isEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Student not found"),
+        ),
+      );
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -141,20 +105,12 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
           "Student Marks Management",
         ),
       ),
-
-      body:
-
-      Padding(
-
-        padding:
-        const EdgeInsets.all(
-          18,
-        ),
-
-        child:
-        Column(
-
+      body: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
           children: [
+
+            // Student Details Card
 
             glass(
               isDark,
@@ -163,219 +119,133 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                 children: [
 
                   const Text(
-                    "Academic Details",
+                    "Student Details",
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
 
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 20),
 
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-
-                      drop(
-                          year,
-                          [
-                            "1st", "2nd", "3rd", "4th"
-                          ],
-
-                              (v) {
-                            setState(() {
-                              year = v!;
-                            });
-                          }
-                      ),
-
-                      drop(
-                          department,
-
-                          [
-
-                            "CSE",
-                            "CSM",
-                            "AIML",
-                            "ECE",
-                            "EEE"
-                          ],
-
-                              (v) {
-                            setState(() {
-                              department = v!;
-                            });
-                          }
-                      ),
-
-                      drop(
-                          section,
-
-                          [
-
-                            "A",
-                            "B",
-                            "C",
-                            "D"
-                          ],
-
-                              (v) {
-                            setState(() {
-                              section = v!;
-                            });
-                          }
-                      ),
-
-                      drop(
-                          semester,
-
-                          [
-
-                            "1", "2", "3", "4",
-                            "5", "6", "7", "8"
-                          ],
-
-                              (v) {
-                            setState(() {
-                              semester = v!;
-                            });
-                          }
-                      ),
-                    ],
-                  ),
                   TextField(
-                    controller: subjectController,
+                    controller: rollNumberController,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) {
+                      if (selectedSubject != null) {
+                        searchStudents();
+                      }
+                    },
                     decoration: const InputDecoration(
-                      hintText: "Subject Code (Example: CS501)",
-                      prefixIcon: Icon(Icons.book),
+                      labelText: "Roll Number",
+                      prefixIcon: Icon(Icons.badge),
                       border: OutlineInputBorder(),
                     ),
                   ),
 
                   const SizedBox(height: 15),
 
-                  DropdownButtonFormField(
+                  // Subject dropdown will come in Step 2
+
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection("subjects")
+                        .snapshots(),
+                    builder: (context, snapshot) {
+
+                      if (!snapshot.hasData) {
+                        return const CircularProgressIndicator();
+                      }
+
+                      return DropdownButtonFormField<String>(
+                        value: selectedSubject,
+                        decoration: const InputDecoration(
+                          labelText: "Select Subject",
+                          prefixIcon: Icon(Icons.menu_book),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: snapshot.data!.docs.map((doc) {
+
+                          final data =
+                          doc.data() as Map<String, dynamic>;
+
+                          return DropdownMenuItem<String>(
+                            value: data["subjectCode"],
+                            child: Text(
+                              "${data["subjectCode"]} - ${data["subjectName"]}",
+                            ),
+                          );
+
+                        }).toList(),
+                        onChanged: (value) {
+
+                          final doc = snapshot.data!.docs.firstWhere(
+                                (e) =>
+                            (e.data() as Map<String, dynamic>)["subjectCode"] == value,
+                          );
+
+                          final subject =
+                          doc.data() as Map<String, dynamic>;
+
+                          setState(() {
+                            selectedSubject = subject["subjectCode"];
+                            selectedSubjectName = subject["subjectName"];
+                            students.clear();
+
+                            for (final controller in marksControllers.values) {
+                              controller.dispose();
+                            }
+
+                            marksControllers.clear();
+
+                            marksControllers.clear();
+                          });
+                        },
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  DropdownButtonFormField<String>(
                     value: exam,
-                    items: exams.map(
-                          (e) =>
-                          DropdownMenuItem(
-                            value: e,
-                            child: Text(e),
-                          ),
-                    ).toList(),
+                    decoration: const InputDecoration(
+                      labelText: "Exam",
+                      prefixIcon: Icon(Icons.assignment),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: exams
+                        .map(
+                          (e) => DropdownMenuItem(
+                        value: e,
+                        child: Text(e),
+                      ),
+                    )
+                        .toList(),
                     onChanged: (v) {
                       setState(() {
                         exam = v!;
                       });
                     },
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                    ),
                   ),
 
-                ],
-              ),
-
-            ),
-
-            const SizedBox(
-              height: 15,
-            ),
-
-            glass(
-              isDark,
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  const Text(
-                    "Excel Upload",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  ListTile(
-                    leading: const Icon(Icons.download),
-                    title: const Text("Download Excel Template"),
-                    subtitle: const Text("Upload marks for the selected class"),
-                    trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () {},
-                  ),
-
-                  const Divider(),
-
-                  ListTile(
-                    leading: const Icon(Icons.upload_file),
-                    title: const Text("Upload Excel"),
-                    subtitle: const Text("Upload marks using Excel"),
-                    trailing: const Icon(Icons.arrow_forward_ios),
-                      onTap: () async {
-
-                        final rows = await excelService.pickExcel();
-
-                        if (rows.isEmpty) return;
-
-                        if (!context.mounted) return;
-
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ExcelPreviewPage(rows: rows),
-                          ),
-                        );
-
-                      }
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            glass(
-              isDark,
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  const Text(
-                    "Manual Entry",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-
-                  const SizedBox(height: 5),
-
-                  Text(
-                    "Search students and enter marks manually.",
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 20),
 
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.search),
-                      label: const Text("Search Students"),
-                      onPressed: loading
-                          ? null
-                          : () {
-                        if (subjectController.text
-                            .trim()
-                            .isEmpty) {
+                      label: const Text("Search Student"),
+                      onPressed: () {
+
+                        if (rollNumberController.text.trim().isEmpty ||
+                            selectedSubject == null) {
+
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text("Please enter subject code"),
+                              content: Text(
+                                "Enter Roll Number and Select Subject",
+                              ),
                             ),
                           );
 
@@ -386,14 +256,58 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                       },
                     ),
                   ),
-
                 ],
               ),
             ),
 
-            const SizedBox(
-              height: 20,
+            const SizedBox(height: 20),
+
+            // Excel Card
+
+            glass(
+              isDark,
+              Column(
+                children: [
+
+                  ListTile(
+                    leading: const Icon(Icons.download),
+                    title: const Text("Download Excel Template"),
+                    trailing: const Icon(Icons.arrow_forward_ios),
+                    onTap: () async {
+                      await excelService.downloadTemplate();
+                    },
+                  ),
+
+                  const Divider(),
+
+                  ListTile(
+                    leading: const Icon(Icons.upload_file),
+                    title: const Text("Upload Excel"),
+                    trailing: const Icon(Icons.arrow_forward_ios),
+                    onTap: () async {
+
+                      final rows = await excelService.pickExcel();
+
+                      if (rows.isEmpty) return;
+
+                      if (!context.mounted) return;
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ExcelPreviewPage(
+                            rows: rows,
+                          ),
+                        ),
+                      );
+
+                    },
+                  ),
+                ],
+              ),
             ),
+
+            const SizedBox(height: 20),
 
             Expanded(
               child: loading
@@ -402,15 +316,35 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
               )
                   : students.isEmpty
                   ? const Center(
-                child: Text("No Students Found"),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.school,
+                      size: 70,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(height: 15),
+                    Text(
+                      "Search a student to enter marks",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               )
                   : ListView.builder(
                 itemCount: students.length,
                 itemBuilder: (context, index) {
-                  final student =
-                  students[index].data() as Map<String, dynamic>;
 
-                  final uid = students[index].id;
+                  final student =
+                  students[index].data()
+                  as Map<String, dynamic>;
+
+                  final uid =
+                      students[index].id;
 
                   marksControllers.putIfAbsent(
                     uid,
@@ -429,64 +363,84 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
               ),
             ),
 
-          ], // closes children
-        ), // closes Column
-      ),
-      // closes Padding
-
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 80),
-        child: FloatingActionButton.extended(
-          backgroundColor: const Color(0xFF1976D2),
-          icon: const Icon(Icons.save),
-          label: const Text("Save Manual Marks"),
-          onPressed: students.isEmpty
-              ? null
-              : () async {
-            for (var e in marksControllers.entries) {
-              final marks = int.tryParse(e.value.text);
-
-              if (marks == null) continue;
-
-              if (marks < 0 || marks > 100) continue;
-
-              await FirebaseFirestore.instance
-                  .collection("student_marks")
-                  .doc("${e.key}_${subjectController.text.trim()}")
-                  .set({
-                "studentId": e.key,
-                "year": year,
-                "department": department,
-                "section": section,
-                "semester": int.parse(semester),
-                "subject": subjectController.text.trim(),
-                exam: e.value.text.trim(),
-              }, SetOptions(merge: true));
-            }
-
-            if (!mounted) return;
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                backgroundColor: Colors.green,
-                content: Text("Marks Uploaded Successfully"),
-              ),
-            );
-
-            for (final controller in marksControllers.values) {
-              controller.clear();
-            }
-
-            subjectController.clear();
-          },
+          ],
         ),
       ),
+
+    floatingActionButton: Padding(
+    padding: const EdgeInsets.only(bottom: 80),
+    child: FloatingActionButton.extended(
+    backgroundColor: const Color(0xFF1976D2),
+    icon: const Icon(Icons.save),
+    label: const Text("Save Manual Marks"),
+      onPressed: students.isEmpty || selectedSubject == null
+    ? null
+        : () async {
+    for (var e in marksControllers.entries) {
+    final marks = int.tryParse(e.value.text);
+
+    if (marks == null) continue;
+
+    if (marks < 0 || marks > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Marks must be between 0 and 100"),
+        ),
+      );
+      return;
+    }
+    final student =
+    students.firstWhere((s) => s.id == e.key);
+
+    final data =
+    student.data() as Map<String, dynamic>;
+
+    await FirebaseFirestore.instance
+        .collection("student_marks")
+        .doc("${e.key}_${selectedSubject}_$exam")
+        .set({
+      "studentId": e.key,
+      "rollNumber": data["rollNumber"],
+      "studentName": data["name"],
+      "year": data["year"],
+      "department": data["department"],
+      "section": data["section"],
+      "semester": data["semester"],
+      "subjectCode": selectedSubject,
+      "subjectName": selectedSubjectName,
+      exam: e.value.text.trim(),
+    }, SetOptions(merge: true));
+    }
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+    backgroundColor: Colors.green,
+    content: Text("Marks Uploaded Successfully"),
+    ),
+    );
+
+    for (final controller in marksControllers.values) {
+    controller.clear();
+    }
+
+    setState(() {
+      selectedSubject = null;
+      selectedSubjectName = null;
+      students.clear();
+    });
+
+    rollNumberController.clear();
+    },
+    ),
+    ),
     );
   }
 
   @override
   void dispose() {
-    subjectController.dispose();
+    rollNumberController.dispose();
 
     for (final controller in marksControllers.values) {
       controller.dispose();
@@ -575,63 +529,51 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
           s["name"] ?? "Unknown Student",
         ),
 
-        subtitle: Text(
-      s["rollNumber"]?.toString() ?? "",
-    ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            Text(
+              s["rollNumber"]?.toString() ?? "",
+            ),
+
+            const SizedBox(height: 3),
+
+            Text(
+              "${s["department"]} | ${s["year"]} Year | Semester ${s["semester"]}",
+              style: const TextStyle(
+                fontSize: 12,
+              ),
+            ),
+
+          ],
+        ),
 
         trailing:
 
         SizedBox(
-
-          width: 90,
-
-          child:
-          TextField(
+          width: 85,
+          child: TextField(
             controller: marksControllers[uid],
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
             decoration: const InputDecoration(
-              hintText: "0",
-              border: OutlineInputBorder(),
+              labelText: "Marks",
               isDense: true,
+              border: OutlineInputBorder(),
             ),
           ),
         ),
 
+
+
       ),
     );
 
   }
-  Widget drop(
-      String value,
-      List<String> items,
-      Function(String?) f,
-      ) {
-    return SizedBox(
-      width: 150,
-      child: DropdownButtonFormField<String>(
-        value: value,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 10,
-          ),
-        ),
-        items: items
-            .map(
-              (e) => DropdownMenuItem<String>(
-            value: e,
-            child: Text(e),
-          ),
-        )
-            .toList(),
-        onChanged: f,
-      ),
-    );
-  }
-
 }
+
+
 
 
 
