@@ -1,6 +1,7 @@
 import 'dart:ui';
 import '../../services/subject_service.dart';
 import 'package:flutter/material.dart';
+
 import '../screens/edit_subject_page.dart';
 class SubjectCard extends StatelessWidget {
   final Map<String, dynamic> subject;

@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter/foundation.dart';
+
 class ExcelSubjectService {
   Future<String> downloadTemplate() async {
     final excel = Excel.createExcel();
@@ -55,8 +57,13 @@ class ExcelSubjectService {
       return 0;
     }
 
-    final bytes = File(result.files.single.path!)
-        .readAsBytesSync();
+    final filePath = result.files.single.path;
+
+    if (filePath == null) {
+      return 0;
+    }
+
+    final bytes = File(filePath).readAsBytesSync();
 
     final excel = Excel.decodeBytes(bytes);
 
@@ -70,7 +77,6 @@ class ExcelSubjectService {
 
     final sheet = excel.tables.values.first;
 
-    if (sheet == null) return 0;
 
     for (int i = 1; i < sheet.rows.length; i++) {
 
@@ -134,7 +140,7 @@ class ExcelSubjectService {
       count++;
     }
 
-    print("Imported $count subjects");
+    debugPrint("Imported $count subjects");
 
     return count;
   }
