@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/excel_service.dart';
 import 'excel_preview_page.dart';
+
+import '../../services/excel_subject_service.dart';
 class TeacherMarksPage extends StatefulWidget {
 
   const TeacherMarksPage({super.key});
@@ -23,6 +25,9 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
   String exam = "Mid 1";
   final rollNumberController = TextEditingController();
   final ExcelService excelService = ExcelService();
+
+  final ExcelSubjectService templateService =
+  ExcelSubjectService();
 
   Map<String,
       TextEditingController>
@@ -158,34 +163,49 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                       }
 
                       return DropdownButtonFormField<String>(
+                        isExpanded: true,
                         value: selectedSubject,
                         decoration: const InputDecoration(
                           labelText: "Select Subject",
                           prefixIcon: Icon(Icons.menu_book),
                           border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 12,
+                          ),
                         ),
-                        items: snapshot.data!.docs.map((doc) {
 
-                          final data =
-                          doc.data() as Map<String, dynamic>;
+                        items: snapshot.data!.docs.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
 
                           return DropdownMenuItem<String>(
                             value: data["subjectCode"],
                             child: Text(
                               "${data["subjectCode"]} - ${data["subjectName"]}",
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                           );
-
                         }).toList(),
-                        onChanged: (value) {
 
+                        selectedItemBuilder: (context) {
+                          return snapshot.data!.docs.map((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+
+                            return Text(
+                              data["subjectCode"],
+                              overflow: TextOverflow.ellipsis,
+                            );
+                          }).toList();
+                        },
+
+                        onChanged: (value) {
                           final doc = snapshot.data!.docs.firstWhere(
                                 (e) =>
                             (e.data() as Map<String, dynamic>)["subjectCode"] == value,
                           );
 
-                          final subject =
-                          doc.data() as Map<String, dynamic>;
+                          final subject = doc.data() as Map<String, dynamic>;
 
                           setState(() {
                             selectedSubject = subject["subjectCode"];
@@ -197,8 +217,6 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                             }
 
                             marksControllers.clear();
-
-                            marksControllers.clear();
                           });
                         },
                       );
@@ -208,6 +226,7 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                   const SizedBox(height: 15),
 
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     value: exam,
                     decoration: const InputDecoration(
                       labelText: "Exam",
@@ -274,7 +293,7 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                     title: const Text("Download Excel Template"),
                     trailing: const Icon(Icons.arrow_forward_ios),
                     onTap: () async {
-                      await excelService.downloadTemplate();
+                      await templateService.downloadTemplate();
                     },
                   ),
 
@@ -471,11 +490,10 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
 
         child:
         Container(
-
-          padding:
-          const EdgeInsets.all(
-            15,
-          ),
+          padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 18,
+        ),
 
           decoration:
           BoxDecoration(
