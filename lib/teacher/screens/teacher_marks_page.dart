@@ -162,85 +162,176 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                         return const CircularProgressIndicator();
                       }
 
-                      return DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        value: selectedSubject,
-                        decoration: const InputDecoration(
-                          labelText: "Select Subject",
-                          prefixIcon: Icon(Icons.menu_book),
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 12,
-                          ),
-                        ),
+                      final subjects = snapshot.data!.docs;
 
-                        items: snapshot.data!.docs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
+                      return Autocomplete<Map<String, dynamic>>(
 
-                          return DropdownMenuItem<String>(
-                            value: data["subjectCode"],
-                            child: Text(
-                              "${data["subjectCode"]} - ${data["subjectName"]}",
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          );
-                        }).toList(),
+                        optionsBuilder: (TextEditingValue textEditingValue) {
 
-                        selectedItemBuilder: (context) {
-                          return snapshot.data!.docs.map((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
+                          if (textEditingValue.text.isEmpty) {
+                            return const Iterable<Map<String, dynamic>>.empty();
+                          }
 
-                            return Text(
-                              data["subjectCode"],
-                              overflow: TextOverflow.ellipsis,
-                            );
-                          }).toList();
+                          return subjects
+                              .map((e) => e.data() as Map<String, dynamic>)
+                              .where((subject) {
+
+                            final code = subject["subjectCode"]
+                                .toString()
+                                .toLowerCase();
+
+                            final name = subject["subjectName"]
+                                .toString()
+                                .toLowerCase();
+
+                            final search =
+                            textEditingValue.text.toLowerCase();
+
+                            return code.contains(search) ||
+                                name.contains(search);
+
+                          });
+
                         },
 
-                        onChanged: (value) {
-                          final doc = snapshot.data!.docs.firstWhere(
-                                (e) =>
-                            (e.data() as Map<String, dynamic>)["subjectCode"] == value,
+                        displayStringForOption: (subject) =>
+                        subject["subjectCode"],
+
+                        fieldViewBuilder: (
+                            context,
+                            controller,
+                            focusNode,
+                            onFieldSubmitted,
+                            ) {
+
+                          return TextField(
+
+                            controller: controller,
+
+                            focusNode: focusNode,
+
+                            decoration: const InputDecoration(
+
+                              labelText: "Subject Code",
+
+                              hintText: "Type Subject Code",
+
+                              prefixIcon: Icon(Icons.search),
+
+                              border: OutlineInputBorder(),
+
+                            ),
+
                           );
 
-                          final subject = doc.data() as Map<String, dynamic>;
+                        },
+
+                        optionsViewBuilder: (
+                            context,
+                            onSelected,
+                            options,
+                            ) {
+
+                          return Align(
+
+                            alignment: Alignment.topLeft,
+
+                            child: Material(
+
+                              elevation: 4,
+
+                              child: SizedBox(
+
+                                width: 400,
+
+                                child: ListView.builder(
+
+                                  padding: EdgeInsets.zero,
+
+                                  shrinkWrap: true,
+
+                                  itemCount: options.length,
+
+                                  itemBuilder: (context, index) {
+
+                                    final subject =
+                                    options.elementAt(index);
+
+                                    return ListTile(
+
+                                      title: Text(
+                                        subject["subjectCode"],
+                                      ),
+
+                                      subtitle: Text(
+                                        subject["subjectName"],
+                                      ),
+
+                                      onTap: () {
+
+                                        onSelected(subject);
+
+                                      },
+
+                                    );
+
+                                  },
+
+                                ),
+
+                              ),
+
+                            ),
+
+                          );
+
+                        },
+
+                        onSelected: (subject) {
 
                           setState(() {
-                            selectedSubject = subject["subjectCode"];
-                            selectedSubjectName = subject["subjectName"];
+
+                            selectedSubject =
+                            subject["subjectCode"];
+
+                            selectedSubjectName =
+                            subject["subjectName"];
+
                             students.clear();
 
-                            for (final controller in marksControllers.values) {
+                            for (final controller
+                            in marksControllers.values) {
+
                               controller.dispose();
+
                             }
 
                             marksControllers.clear();
+
                           });
+
                         },
+
                       );
+
                     },
                   ),
 
                   const SizedBox(height: 15),
 
                   DropdownButtonFormField<String>(
-                    isExpanded: true,
                     value: exam,
                     decoration: const InputDecoration(
                       labelText: "Exam",
                       prefixIcon: Icon(Icons.assignment),
                       border: OutlineInputBorder(),
                     ),
-                    items: exams
-                        .map(
-                          (e) => DropdownMenuItem(
+                    items: exams.map((e) {
+                      return DropdownMenuItem(
                         value: e,
                         child: Text(e),
-                      ),
-                    )
-                        .toList(),
+                      );
+                    }).toList(),
                     onChanged: (v) {
                       setState(() {
                         exam = v!;
@@ -441,8 +532,10 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
     );
 
     for (final controller in marksControllers.values) {
-    controller.clear();
+      controller.dispose();
     }
+
+    marksControllers.clear();
 
     setState(() {
       selectedSubject = null;
@@ -495,30 +588,13 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
           vertical: 18,
         ),
 
-          decoration:
-          BoxDecoration(
-
-            color:
-
-            dark
-
-                ?
-
-            Colors.white
-                .withOpacity(
-              .08,
-            )
-
-                :
-
-            Colors.white
-                .withOpacity(
-              .7,
-            ),
+          decoration: BoxDecoration(
+            color: dark
+                ? Colors.white.withOpacity(.08)
+                : Colors.white.withOpacity(.7),
+            borderRadius: BorderRadius.circular(25),
           ),
-
-          child:
-          child,
+          child: child,
         ),
       ),
     );
