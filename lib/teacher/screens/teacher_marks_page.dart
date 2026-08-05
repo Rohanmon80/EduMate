@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/excel_service.dart';
 import 'excel_preview_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../services/excel_subject_service.dart';
 class TeacherMarksPage extends StatefulWidget {
@@ -16,9 +17,13 @@ class TeacherMarksPage extends StatefulWidget {
 
 class _TeacherMarksPageState extends State<TeacherMarksPage> {
 
+
   bool loading = false;
 
   List<DocumentSnapshot> students = [];
+  String teacherUid = "";
+  String teacherName = "";
+  String teacherDepartment = "";
 
   String? selectedSubject;
   String? selectedSubjectName;
@@ -43,6 +48,31 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
     "Lab Internal 2",
     "Lab External",
   ];
+  Future<void> loadTeacher() async {
+
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) return;
+
+    teacherUid = user.uid;
+
+    final teacher = await FirebaseFirestore.instance
+        .collection("teachers")
+        .doc(user.uid)
+        .get();
+
+    if (teacher.exists) {
+
+      final data = teacher.data()!;
+
+      teacherName = data["name"] ?? "";
+
+      teacherDepartment =
+          data["department"] ?? "";
+
+      setState(() {});
+    }
+  }
   Future<void> searchStudents() async {
     if (loading) return;
 
@@ -512,13 +542,25 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
       "studentId": e.key,
       "rollNumber": data["rollNumber"],
       "studentName": data["name"],
-      "year": data["year"],
+
       "department": data["department"],
-      "section": data["section"],
+      "year": data["year"],
       "semester": data["semester"],
+      "section": data["section"],
+
       "subjectCode": selectedSubject,
       "subjectName": selectedSubjectName,
-      exam: e.value.text.trim(),
+
+      "exam": exam,
+      "marks": marks,
+
+      "teacherId": teacherUid,
+      "teacherName": teacherName,
+
+      "released": false,
+      "uploadedAt": FieldValue.serverTimestamp(),
+      "uploadedBy": "teacher",
+
     }, SetOptions(merge: true));
     }
 
@@ -548,6 +590,11 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
     ),
     ),
     );
+  }
+  @override
+  void initState() {
+    super.initState();
+    loadTeacher();
   }
 
   @override
