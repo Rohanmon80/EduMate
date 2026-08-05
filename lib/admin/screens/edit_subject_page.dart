@@ -22,7 +22,7 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
   String department = "AIML";
   String year = "1st";
   int semester = 1;
-  int credits = 4;
+  double credits = 4.0;
   String type = "Theory";
   String regulation = "R23";
 
@@ -161,14 +161,15 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
 
             const SizedBox(height: 15),
 
-            DropdownButtonFormField<int>(
+            DropdownButtonFormField<double>(
               value: credits,
               items: const [
-                DropdownMenuItem(value: 0, child: Text("0 Credit")),
-                DropdownMenuItem(value: 1, child: Text("1 Credit")),
-                DropdownMenuItem(value: 2, child: Text("2 Credits")),
-                DropdownMenuItem(value: 3, child: Text("3 Credits")),
-                DropdownMenuItem(value: 4, child: Text("4 Credits")),
+                DropdownMenuItem(value: 0.0, child: Text("0 Credit")),
+                DropdownMenuItem(value: 1.0, child: Text("1 Credit")),
+                DropdownMenuItem(value: 1.5, child: Text("1.5 Credits")),
+                DropdownMenuItem(value: 2.0, child: Text("2 Credits")),
+                DropdownMenuItem(value: 3.0, child: Text("3 Credits")),
+                DropdownMenuItem(value: 4.0, child: Text("4 Credits")),
               ],
               onChanged: (v) {
                 setState(() {

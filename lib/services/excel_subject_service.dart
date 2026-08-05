@@ -123,9 +123,9 @@ class ExcelSubjectService {
             1,
 
         "credits":
-        int.tryParse(
+        double.tryParse(
             row[5]?.value.toString() ?? "0") ??
-            0,
+            0.0,
 
         "type":
         row[6]?.value.toString() ?? "",

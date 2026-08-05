@@ -12,7 +12,7 @@ class SubjectService {
     required String department,
     required String year,
     required int semester,
-    required int credits,
+    required double credits,
     required String type,
     required String regulation,
   }) async {
