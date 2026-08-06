@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class ResultsPage extends StatelessWidget {
+class ResultsPage extends StatefulWidget {
+  const ResultsPage({super.key});
 
-  const ResultsPage({
-    super.key,
-  });
+  @override
+  State<ResultsPage> createState() => _ResultsPageState();
+}
+
+class _ResultsPageState extends State<ResultsPage> {
+  int? selectedSemester;
 
   @override
   Widget build(
@@ -48,251 +52,199 @@ class ResultsPage extends StatelessWidget {
         ),
       ),
 
-      body:
+      body: Padding(
 
-      StreamBuilder<
-          QuerySnapshot>(
+        padding: const EdgeInsets.all(16),
 
-        stream: FirebaseFirestore.instance
-            .collection("student_marks")
-            .where(
-          "studentId",
-          isEqualTo: FirebaseAuth.instance.currentUser!.uid,
-        )
-            .limit(1)
-            .snapshots(),
+        child: Column(
 
-        builder:
-            (
-            context,
-            snapshot
-            ){
+          children: [
 
-          if(
-          !snapshot.hasData
-          ){
+            DropdownButtonFormField<int>(
 
-            return const Center(
+              value: selectedSemester,
 
-              child:
-              CircularProgressIndicator(),
-            );
-          }
+              decoration: const InputDecoration(
 
-          if (snapshot.data!.docs.isEmpty){
+                labelText: "Semester",
 
-            return const Center(
+                border: OutlineInputBorder(),
 
-              child:
-              Text(
-                "No Marks Uploaded",
               ),
-            );
-          }
 
-          final marks=
+              items: List.generate(
 
-          snapshot
-              .data!
-              .docs.first.data()
+                8,
 
-          as Map<
-              String,
-              dynamic>;
+                    (i)=>DropdownMenuItem(
 
-          return ListView(
+                  value: i+1,
 
-            padding:
-            const EdgeInsets.all(
-              20,
+                  child: Text(
+                    "Semester ${i+1}",
+                  ),
+
+                ),
+
+              ),
+
+              onChanged: (value){
+
+                setState(() {
+
+                  selectedSemester=value;
+
+                });
+
+              },
+
             ),
 
-            children:[
+            const SizedBox(height:20),
 
-              markCard(
+            if(selectedSemester==null)
 
-                context,
+              const Expanded(
 
-                "Mid 1",
+                child: Center(
 
-                marks[
-                "Mid 1"
-                ] ??
+                  child: Text(
+                    "Select Semester",
+                  ),
 
-                    "--",
+                ),
+
+              )
+
+            else
+
+              Expanded(
+
+                child: StreamBuilder<QuerySnapshot>(
+
+                  stream: FirebaseFirestore.instance
+
+                      .collection("student_marks")
+
+                      .where(
+                    "studentId",
+                    isEqualTo:
+                    FirebaseAuth.instance.currentUser!.uid,
+                  )
+
+                      .where(
+                    "semester",
+                    isEqualTo: selectedSemester,
+                  )
+
+                      .where(
+                    "released",
+                    isEqualTo: true,
+                  )
+
+                      .snapshots(),
+
+                  builder:(context,snapshot){
+
+                    if(!snapshot.hasData){
+
+                      return const Center(
+                        child:
+                        CircularProgressIndicator(),
+                      );
+
+                    }
+
+                    if(snapshot.data!.docs.isEmpty){
+
+                      return const Center(
+                        child:
+                        Text(
+                          "No Results Released",
+                        ),
+                      );
+
+                    }
+                    final docs = snapshot.data!.docs;
+
+                    Map<String, List<Map<String, dynamic>>> grouped = {};
+
+                    for (final doc in docs) {
+
+                      final data = doc.data() as Map<String, dynamic>;
+
+                      grouped.putIfAbsent(
+                        data["subjectCode"],
+                            () => [],
+                      );
+
+                      grouped[data["subjectCode"]]!.add(data);
+
+                    }
+                    return ListView(
+
+                      children: grouped.entries.map((entry) {
+
+                        final list = entry.value;
+                        final first = list.first;
+
+                        return Card(
+
+                          margin: const EdgeInsets.only(bottom: 15),
+
+                          child: Padding(
+
+                            padding: const EdgeInsets.all(16),
+
+                            child: Column(
+
+                              crossAxisAlignment: CrossAxisAlignment.start,
+
+                              children: [
+
+                                Text(
+                                  first["subjectName"],
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 8),
+
+                                Text(
+                                  "Subject Code : ${first["subjectCode"]}",
+                                ),
+
+                                const SizedBox(height: 10),
+
+                                const Text(
+                                  "Result calculation coming in Part 2",
+                                ),
+
+                              ],
+
+                            ),
+
+                          ),
+
+                        );
+
+                      }).toList(),
+
+                    );
+
+                  },
+
+                ),
+
               ),
 
-              markCard(
+          ],
 
-                context,
-
-                "Mid 2",
-
-                marks[
-                "Mid 2"
-                ] ??
-
-                    "--",
-              ),
-
-              markCard(
-
-                context,
-
-                "Sem External 1",
-
-                marks[
-                "Sem External 1"
-                ] ??
-
-                    "--",
-              ),
-
-              markCard(
-
-                context,
-
-                "Sem External 2",
-
-                marks[
-                "Sem External 2"
-                ] ??
-
-                    "--",
-              ),
-
-              markCard(
-
-                context,
-
-                "Lab Internal 1",
-
-                marks[
-                "Lab Internal 1"
-                ] ??
-
-                    "--",
-              ),
-
-              markCard(
-
-                context,
-
-                "Lab Internal 2",
-
-                marks[
-                "Lab Internal 2"
-                ] ??
-
-                    "--",
-              ),
-
-              markCard(
-
-                context,
-
-                "Lab External",
-
-                marks[
-                "Lab External"
-                ] ??
-
-                    "--",
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget markCard(
-
-      BuildContext context,
-
-      String title,
-
-      dynamic value){
-
-    final isDark=
-
-        Theme.of(context)
-            .brightness==
-
-            Brightness.dark;
-
-    return Container(
-
-      margin:
-      const EdgeInsets.only(
-        bottom:20,
-      ),
-
-      padding:
-      const EdgeInsets.all(
-        20,
-      ),
-
-      decoration:
-      BoxDecoration(
-
-        color:
-
-        isDark
-
-            ? Colors.white
-            .withOpacity(
-          .06,
-        )
-
-            : Colors.white,
-
-        borderRadius:
-        BorderRadius.circular(
-          30,
         ),
-      ),
 
-      child:
-      Row(
-
-        mainAxisAlignment:
-        MainAxisAlignment.spaceBetween,
-
-        children:[
-
-          Text(
-
-            title,
-
-            style:
-            const TextStyle(
-
-              fontSize:18,
-
-              fontWeight:
-              FontWeight.bold,
-            ),
-          ),
-
-          Text(
-
-            value.toString(),
-
-            style:
-            const TextStyle(
-
-              fontSize:22,
-
-              color:
-              Colors.blue,
-
-              fontWeight:
-              FontWeight.bold,
-            ),
-          ),
-        ],
       ),
     );
   }
-}
+
