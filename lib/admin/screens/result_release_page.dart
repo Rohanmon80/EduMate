@@ -16,6 +16,11 @@ class _ResultReleasePageState
 
   final ResultReleaseService service =
   ResultReleaseService();
+  String selectedDepartment = "All";
+  String selectedYear = "All";
+  String selectedSection = "All";
+  String selectedExam = "All";
+  int selectedSemester = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +96,59 @@ class _ResultReleasePageState
             child: Column(
 
               children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+
+                      SizedBox(
+                        width: 170,
+                        child: DropdownButtonFormField<String>(
+                          value: selectedDepartment,
+                          decoration: const InputDecoration(
+                            labelText: "Department",
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: "All", child: Text("All")),
+                            DropdownMenuItem(value: "AIML", child: Text("AIML")),
+                            DropdownMenuItem(value: "CSE", child: Text("CSE")),
+                            DropdownMenuItem(value: "ECE", child: Text("ECE")),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedDepartment = value!;
+                            });
+                          },
+                        ),
+                      ),
+
+                      SizedBox(
+                        width: 120,
+                        child: DropdownButtonFormField<int>(
+                          value: selectedSemester,
+                          decoration: const InputDecoration(
+                            labelText: "Semester",
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 0, child: Text("All")),
+                            DropdownMenuItem(value: 1, child: Text("1")),
+                            DropdownMenuItem(value: 2, child: Text("2")),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedSemester = value!;
+                            });
+                          },
+                        ),
+                      ),
+
+                    ],
+                  ),
+                ),
 
                 GridView.count(
 
@@ -197,6 +255,15 @@ class _ResultReleasePageState
 
                     final first =
                     list.first.data() as Map<String, dynamic>;
+                    if (selectedDepartment != "All" &&
+                        first["department"] != selectedDepartment) {
+                      return const SizedBox.shrink();
+                    }
+
+                    if (selectedSemester != 0 &&
+                        first["semester"] != selectedSemester) {
+                      return const SizedBox.shrink();
+                    }
 
                     final uploaded = list.length;
 

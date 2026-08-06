@@ -25,7 +25,28 @@ class MissingStudentsDialog extends StatelessWidget {
 
     return AlertDialog(
 
-      title: Text("$subjectCode - $exam"),
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          Text(
+            subjectCode,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          Text(
+            exam,
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 14,
+            ),
+          ),
+
+        ],
+      ),
 
       content: SizedBox(
 
@@ -48,6 +69,11 @@ class MissingStudentsDialog extends StatelessWidget {
             FirebaseFirestore.instance
                 .collection("student_marks")
                 .where("subjectCode", isEqualTo: subjectCode)
+                .where("exam", isEqualTo: exam)
+                .where("department", isEqualTo: department)
+                .where("year", isEqualTo: year)
+                .where("semester", isEqualTo: semester)
+                .where("section", isEqualTo: section)
                 .get(),
 
           ]),
@@ -74,76 +100,98 @@ class MissingStudentsDialog extends StatelessWidget {
             as Map<String,dynamic>)["rollNumber"])
                 .toSet();
 
-            return ListView.builder(
+            final uploadedCount =
+                uploaded.length;
 
-              itemCount: students.docs.length,
+            final missingCount =
+                students.docs.length -
+                    uploadedCount;
 
-              itemBuilder: (context,index){
+            return Column(
 
-                final s =
-                students.docs[index].data()
-                as Map<String,dynamic>;
+              children: [
 
-                final done =
-                uploaded.contains(
-                    s["rollNumber"]);
+                Container(
 
-                return ListTile(
+                  padding: const EdgeInsets.all(10),
 
-                  leading:
+                  decoration: BoxDecoration(
 
-                  CircleAvatar(
+                    color: Colors.blue.shade50,
 
-                    backgroundColor:
-                    done
-                        ? Colors.green
-                        : Colors.red,
-
-                    child: Icon(
-
-                      done
-                          ? Icons.check
-                          : Icons.close,
-
-                      color: Colors.white,
-
-                    ),
+                    borderRadius:
+                    BorderRadius.circular(10),
 
                   ),
 
-                  title: Text(
-                    s["name"],
-                  ),
+                  child: Row(
 
-                  subtitle: Text(
-                    s["rollNumber"],
-                  ),
+                    mainAxisAlignment:
+                    MainAxisAlignment.spaceAround,
 
-                  trailing: Text(
+                    children: [
 
-                    done
-                        ? "Uploaded"
-                        : "Missing",
+                      Text(
+                        "Uploaded : $uploadedCount",
+                      ),
 
-                    style: TextStyle(
+                      Text(
+                        "Missing : $missingCount",
+                      ),
 
-                      color:
-                      done
-                          ? Colors.green
-                          : Colors.red,
-
-                      fontWeight:
-                      FontWeight.bold,
-
-                    ),
+                    ],
 
                   ),
 
-                );
+                ),
 
-              },
+                const SizedBox(height: 10),
+
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: students.docs.length,
+                    itemBuilder: (context, index) {
+
+                      final s =
+                      students.docs[index].data()
+                      as Map<String, dynamic>;
+
+                      final done =
+                      uploaded.contains(s["rollNumber"]);
+
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor:
+                          done ? Colors.green : Colors.red,
+                          child: Icon(
+                            done ? Icons.check : Icons.close,
+                            color: Colors.white,
+                          ),
+                        ),
+
+                        title: Text(s["name"]),
+
+                        subtitle: Text(s["rollNumber"]),
+
+                        trailing: Text(
+                          done
+                              ? "✓ Uploaded"
+                              : "❌ Missing",
+                          style: TextStyle(
+                            color:
+                            done ? Colors.green : Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+              ],
 
             );
+
 
           },
 
