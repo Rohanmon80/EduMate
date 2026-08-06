@@ -48,12 +48,7 @@ class _ResultReleasePageState
             doc.data() as Map<String, dynamic>;
 
             final key =
-                "${data["subjectCode"]}_${data.keys.firstWhere(
-                  (e) => e.contains("Mid") ||
-                  e.contains("Sem") ||
-                  e.contains("Lab"),
-              orElse: () => "Unknown",
-            )}";
+                "${data["subjectCode"]}_${data["exam"]}";
 
             grouped.putIfAbsent(key, () => []);
 
@@ -72,11 +67,9 @@ class _ResultReleasePageState
               ),
             );
           }
-          final totalSubjects = grouped.length;
 
           int releasedSubjects = 0;
-          int pendingSubjects = 0;
-          int missingEntries = 0;
+
 
           for (final entry in grouped.entries) {
 
@@ -136,27 +129,51 @@ class _ResultReleasePageState
 
                     ),
 
-                    ResultStatsCard(
+                    FutureBuilder<int>(
 
-                      title: "Teachers Pending",
+                      future: service.getTeachersPending(),
 
-                      value: "--",
+                      builder: (context, snapshot) {
 
-                      icon: Icons.person,
+                        final pending = snapshot.data ?? 0;
 
-                      color: Colors.blue,
+                        return ResultStatsCard(
+
+                          title: "Teachers Pending",
+
+                          value: pending.toString(),
+
+                          icon: Icons.person,
+
+                          color: Colors.blue,
+
+                        );
+
+                      },
 
                     ),
 
-                    ResultStatsCard(
+                    FutureBuilder<int>(
 
-                      title: "Missing Entries",
+                      future: service.getTotalMissingEntries(),
 
-                      value: missingEntries.toString(),
+                      builder: (context, snapshot) {
 
-                      icon: Icons.warning,
+                        final totalMissing = snapshot.data ?? 0;
 
-                      color: Colors.red,
+                        return ResultStatsCard(
+
+                          title: "Missing Entries",
+
+                          value: totalMissing.toString(),
+
+                          icon: Icons.warning,
+
+                          color: Colors.red,
+
+                        );
+
+                      },
 
                     ),
 
@@ -176,9 +193,157 @@ class _ResultReleasePageState
                   children:
 
                   grouped.entries.map((entry){
+                    final list = entry.value;
 
-                    // Keep your existing subject card code here
+                    final first =
+                    list.first.data() as Map<String, dynamic>;
 
+                    final uploaded = list.length;
+
+                    final released = first["released"] == true;
+
+                    return Card(
+
+                      margin: const EdgeInsets.all(12),
+
+                      child: Padding(
+
+                        padding: const EdgeInsets.all(16),
+
+                        child: Column(
+
+                          crossAxisAlignment: CrossAxisAlignment.start,
+
+                          children: [
+
+                            Text(
+                              first["subjectName"],
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            Text("Subject : ${first["subjectCode"]}"),
+
+                            Text("Teacher : ${first["teacherName"]}"),
+
+                            Text("Exam : ${first["exam"]}"),
+
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+
+                                Text("Uploaded : $uploaded"),
+
+                                FutureBuilder<int>(
+                                  future: service.getMissingEntries(
+                                    department: first["department"],
+                                    year: first["year"],
+                                    semester: first["semester"],
+                                    section: first["section"],
+                                    subjectCode: first["subjectCode"],
+                                    exam: first["exam"],
+                                  ),
+                                  builder: (context, snapshot) {
+
+                                    final missing = snapshot.data ?? 0;
+
+                                    return Text(
+                                      "Missing : $missing",
+                                      style: TextStyle(
+                                        color: missing == 0 ? Colors.green : Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    );
+                                  },
+                                ),
+
+                              ],
+                            ),
+
+                            Text(
+                              released
+                                  ? "Status : Released"
+                                  : "Status : Pending",
+                            ),
+
+                            const SizedBox(height: 15),
+
+                            Row(
+
+                              children: [
+
+                                ElevatedButton(
+
+                                  onPressed: () {
+
+                                    showDialog(
+
+                                      context: context,
+
+                                      builder: (_) => MissingStudentsDialog(
+
+                                        subjectCode: first["subjectCode"],
+
+                                        exam: first["exam"],
+
+                                        department: first["department"],
+
+                                        year: first["year"],
+
+                                        semester: first["semester"],
+
+                                        section: first["section"],
+
+                                      ),
+
+                                    );
+
+                                  },
+
+                                  child: const Text("View Students"),
+
+                                ),
+
+                                const Spacer(),
+
+                                ElevatedButton(
+
+                                  onPressed: released
+                                      ? null
+                                      : () async {
+
+                                    for (final d in list) {
+                                      await service.releaseResult(d.id);
+                                    }
+
+                                    if (!context.mounted) return;
+
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text("Results released successfully"),
+                                      ),
+                                    );
+                                  },
+
+                                  child: const Text("Release"),
+
+                                ),
+
+                              ],
+
+                            ),
+
+                          ],
+
+                        ),
+
+                      ),
+
+                    );
                   }).toList(),
 
                 ),
@@ -188,263 +353,6 @@ class _ResultReleasePageState
             ),
 
           );
-
-            children:
-
-            grouped.entries.map((entry) {
-
-              FutureBuilder<int>(
-                future: service.getMissingEntries(
-                  department: first["department"],
-                  year: first["year"],
-                  semester: first["semester"],
-                  section: first["section"],
-                  subjectCode: first["subjectCode"],
-                  exam: entry.key.split("_").last,
-                ),
-
-                builder: (context, snapshot) {
-
-                  final missing = snapshot.data ?? 0;
-
-                  return Text(
-                    "Missing : $missing",
-                    style: TextStyle(
-                      color:
-                      missing == 0
-                          ? Colors.green
-                          : Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  );
-
-                },
-
-              ),
-
-              final list = entry.value;
-
-              final first =
-              list.first.data()
-              as Map<String, dynamic>;
-
-              final uploaded =
-                  list.length;
-
-              final released =
-                  first["released"] == true;
-
-              return Card(
-
-                margin:
-                const EdgeInsets.all(12),
-
-                child: Padding(
-
-                  padding:
-                  const EdgeInsets.all(16),
-
-                  child: Column(
-
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
-
-                    children: [
-
-                      Text(
-
-                        first["subjectName"],
-
-                        style: const TextStyle(
-
-                          fontSize: 18,
-
-                          fontWeight:
-                          FontWeight.bold,
-
-                        ),
-
-                      ),
-
-                      const SizedBox(height:10),
-
-                      Text(
-                        "Subject : ${first["subjectCode"]}",
-                      ),
-
-                      Text(
-                        "Exam : ${entry.key.split("_").last}",
-                      ),
-
-                      Text(
-                        "Uploaded : $uploaded",
-                      ),
-
-                      Text(
-                        released
-                            ? "Status : Released"
-                            : "Status : Pending",
-                      ),
-
-                      const SizedBox(height:15),
-
-                      Row(
-
-                        children: [
-
-                          ElevatedButton(
-
-                            onPressed: () {
-
-                              showDialog(
-
-                                context: context,
-
-                                builder: (_) => MissingStudentsDialog(
-
-                                  subjectCode:
-                                  first["subjectCode"],
-
-                                  exam:
-                                  entry.key.split("_").last,
-
-                                  department:
-                                  first["department"],
-
-                                  year:
-                                  first["year"],
-
-                                  semester:
-                                  first["semester"],
-
-                                  section:
-                                  first["section"],
-
-                                ),
-
-                              );
-
-                            },
-
-                            child: const Text(
-                              "View Students",
-                            ),
-
-                          ),
-
-                          const Spacer(),
-
-                          ElevatedButton(
-
-                            onPressed: released
-                                ? null
-                                : () async {
-
-                              for(final d in list){
-
-                                await service.releaseResult(
-                                    d.id);
-
-                              }
-
-                            },
-
-                            child: const Text(
-                              "Release",
-                            ),
-
-                          ),
-
-                        ],
-
-                      ),
-
-                    ],
-
-                  ),
-
-                ),
-
-              );
-
-            }).toList(),
-
-          );
-
-            itemCount: docs.length,
-
-            itemBuilder: (context, index) {
-
-              final data =
-              docs[index].data()
-              as Map<String, dynamic>;
-
-              return Card(
-
-                margin: const EdgeInsets.all(10),
-
-                child: ListTile(
-
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.school),
-                  ),
-
-                  title: Text(
-                    data["subjectName"] ?? "",
-                  ),
-
-                  subtitle: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                    children: [
-
-                      Text(
-                          "Subject : ${data["subjectCode"]}"),
-
-                      Text(
-                          "Student : ${data["studentName"]}"),
-
-                      Text(
-                          "Roll : ${data["rollNumber"]}"),
-
-                    ],
-                  ),
-
-                  trailing: ElevatedButton(
-
-                    child: const Text("Release"),
-
-                    onPressed: () async {
-
-                      await service.releaseResult(
-                          docs[index].id);
-
-                      if (context.mounted) {
-
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(
-
-                          const SnackBar(
-                            content: Text(
-                                "Result Released"),
-                          ),
-
-                        );
-
-                      }
-
-                    },
-
-                  ),
-
-                ),
-
-              );
-
-            },
-
-          );
-
         },
 
       ),

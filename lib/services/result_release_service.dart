@@ -59,11 +59,55 @@ class ResultReleaseService {
         .where("section", isEqualTo: section)
         .get();
 
-    final marks = await FirebaseFirestore.instance
+    final uploaded = await FirebaseFirestore.instance
         .collection("student_marks")
         .where("subjectCode", isEqualTo: subjectCode)
+        .where("exam", isEqualTo: exam)
+        .where("department", isEqualTo: department)
+        .where("year", isEqualTo: year)
+        .where("semester", isEqualTo: semester)
+        .where("section", isEqualTo: section)
         .get();
 
-    return students.docs.length - marks.docs.length;
+    return students.docs.length - uploaded.docs.length;
+  }
+  Future<int> getTotalMissingEntries() async {
+
+    final students = await FirebaseFirestore.instance
+        .collection("users")
+        .where("role", isEqualTo: "student")
+        .get();
+
+    final uploaded = await FirebaseFirestore.instance
+        .collection("student_marks")
+        .get();
+
+    return students.docs.length - uploaded.docs.length;
+  }
+  Future<int> getTeachersPending() async {
+
+    final teachers = await FirebaseFirestore.instance
+        .collection("teachers")
+        .get();
+
+    final uploaded = await FirebaseFirestore.instance
+        .collection("student_marks")
+        .get();
+
+    final uploadedTeachers = uploaded.docs
+        .map((e) => e["teacherId"] as String)
+        .toSet();
+
+    int pending = 0;
+
+    for (final teacher in teachers.docs) {
+
+      if (!uploadedTeachers.contains(teacher.id)) {
+        pending++;
+      }
+
+    }
+
+    return pending;
   }
 }
