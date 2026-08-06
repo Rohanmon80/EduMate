@@ -27,6 +27,7 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
 
   String? selectedSubject;
   String? selectedSubjectName;
+  String subjectType = "";
   String exam = "Mid 1";
   final rollNumberController = TextEditingController();
   final ExcelService excelService = ExcelService();
@@ -38,16 +39,33 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
       TextEditingController>
   marksControllers = {};
 
-  final exams = [
+  List<String> get exams {
 
-    "Mid 1",
-    "Mid 2",
-    "Sem External 1",
-    "Sem External 2",
-    "Lab Internal 1",
-    "Lab Internal 2",
-    "Lab External",
-  ];
+    if(subjectType=="Lab"){
+
+      return [
+
+        "Lab Internal 1",
+
+        "Lab Internal 2",
+
+        "Lab External",
+
+      ];
+
+    }
+
+    return [
+
+      "Mid 1",
+
+      "Mid 2",
+
+      "Sem External",
+
+    ];
+
+  }
   Future<void> loadTeacher() async {
 
     final user = FirebaseAuth.instance.currentUser;
@@ -321,19 +339,18 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
 
                           setState(() {
 
-                            selectedSubject =
-                            subject["subjectCode"];
+                            selectedSubject = subject["subjectCode"];
+                            selectedSubjectName = subject["subjectName"];
+                            subjectType = subject["type"];
 
-                            selectedSubjectName =
-                            subject["subjectName"];
+                            exam = subjectType == "Lab"
+                                ? "Lab Internal 1"
+                                : "Mid 1";
 
                             students.clear();
 
-                            for (final controller
-                            in marksControllers.values) {
-
+                            for (final controller in marksControllers.values) {
                               controller.dispose();
-
                             }
 
                             marksControllers.clear();
@@ -426,7 +443,26 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                     trailing: const Icon(Icons.arrow_forward_ios),
                     onTap: () async {
 
-                      final rows = await excelService.pickExcel();
+                      if(selectedSubject==null){
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+
+                          const SnackBar(
+
+                            content: Text(
+                              "Please select a subject first",
+                            ),
+
+                          ),
+
+                        );
+
+                        return;
+
+                      }
+
+                      final rows =
+                      await excelService.pickExcel();
 
                       if (rows.isEmpty) return;
 
@@ -437,6 +473,11 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                         MaterialPageRoute(
                           builder: (_) => ExcelPreviewPage(
                             rows: rows,
+                            subjectCode: selectedSubject!,
+                            subjectName: selectedSubjectName!,
+                            exam: exam,
+                            teacherId: teacherUid,
+                            teacherName: teacherName,
                           ),
                         ),
                       );

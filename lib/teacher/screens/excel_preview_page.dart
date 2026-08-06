@@ -1,12 +1,22 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-
+import '../../services/excel_service.dart';
 class ExcelPreviewPage extends StatelessWidget {
   final List<List<dynamic>> rows;
+  final String subjectCode;
+  final String subjectName;
+  final String exam;
+  final String teacherId;
+  final String teacherName;
 
   const ExcelPreviewPage({
     super.key,
     required this.rows,
+    required this.subjectCode,
+    required this.subjectName,
+    required this.exam,
+    required this.teacherId,
+    required this.teacherName,
   });
 
   @override
@@ -190,19 +200,64 @@ class ExcelPreviewPage extends StatelessWidget {
                       "Upload",
                     ),
 
-                    onPressed: () {
+                    onPressed: () async {
 
-                      ScaffoldMessenger.of(
-                          context)
-                          .showSnackBar(
+                      try {
 
-                        const SnackBar(
+                        await ExcelService().uploadMarks(
 
-                          content: Text(
-                            "Upload feature coming next",
+                          rows: rows,
+
+                          subjectCode: subjectCode,
+
+                          subjectName: subjectName,
+
+                          exam: exam,
+
+                          teacherId: teacherId,
+
+                          teacherName: teacherName,
+
+                        );
+
+                        if (!context.mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+
+                          const SnackBar(
+
+                            backgroundColor: Colors.green,
+
+                            content: Text(
+                              "Marks Uploaded Successfully",
+                            ),
+
                           ),
-                        ),
-                      );
+
+                        );
+
+                        Navigator.pop(context);
+
+                      } catch (e) {
+
+                        if (!context.mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+
+                          SnackBar(
+
+                            backgroundColor: Colors.red,
+
+                            content: Text(
+                              e.toString(),
+                            ),
+
+                          ),
+
+                        );
+
+                      }
+
                     },
                   ),
                 ),
