@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../services/memo_service.dart';
+import '../widgets/memo_header.dart';
+import '../widgets/memo_student_details.dart';
+import '../widgets/memo_subject_table.dart';
+import '../widgets/memo_summary_card.dart';
 class MemoPage extends StatefulWidget {
   const MemoPage({super.key});
 

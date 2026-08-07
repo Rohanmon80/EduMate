@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import '../../services/memo_service.dart';
+
 class MemoStudentDetails extends StatelessWidget {
   const MemoStudentDetails({super.key});
 
@@ -56,95 +55,55 @@ class MemoStudentDetails extends StatelessWidget {
 
             ),
 
-            // Student Details
+            const SizedBox(width: 30),
+
+            Expanded(
+              child: Column(
+                children: [
+
+                  detailRow(
+                    "Student Name",
+                    student["name"] ?? "",
+                  ),
+
+                  detailRow(
+                    "Roll Number",
+                    student["rollNumber"] ?? "",
+                  ),
+
+                  detailRow(
+                    "Department",
+                    student["department"] ?? "",
+                  ),
+
+                  detailRow(
+                    "Semester",
+                    student["semester"].toString(),
+                  ),
+
+                  detailRow(
+                    "Year",
+                    student["year"] ?? "",
+                  ),
+
+                  detailRow(
+                    "Section",
+                    student["section"] ?? "",
+                  ),
+
+                ],
+              ),
+            ),
 
           ],
 
         );
 
+
       },
 
     );
 
-
-    return Row(
-
-
-      crossAxisAlignment: CrossAxisAlignment.start,
-
-      children: [
-
-        Container(
-
-          width: 130,
-          height: 160,
-
-          decoration: BoxDecoration(
-
-            border: Border.all(
-              color: Colors.black,
-            ),
-
-          ),
-
-          child: const Icon(
-
-            Icons.person,
-
-            size: 80,
-
-            color: Colors.grey,
-
-          ),
-
-        ),
-
-        const SizedBox(width: 30),
-
-        Expanded(
-
-          child: Column(
-
-            children: [
-
-              detailRow(
-                "Student Name",
-                student["name"] ?? "",
-              ),
-
-              detailRow(
-                "Roll Number",
-                student["rollNumber"] ?? "",
-              ),
-
-              detailRow(
-                "Department",
-                student["department"] ?? "",
-              ),
-
-              detailRow(
-                "Semester",
-                student["semester"].toString(),
-              ),
-              detailRow(
-                "Year",
-                student["year"] ?? "",
-              ),
-
-              detailRow(
-                "Section",
-                student["section"] ?? "",
-              ),
-
-            ],
-
-          ),
-
-        ),
-
-      ],
-
-    );
 
   }
 

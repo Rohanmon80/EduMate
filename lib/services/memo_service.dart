@@ -1,9 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../widgets/memo_header.dart';
-import '../widgets/memo_student_details.dart';
-import '../widgets/memo_subject_table.dart';
-import '../widgets/memo_summary_card.dart';
+
 
 class MemoService {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
