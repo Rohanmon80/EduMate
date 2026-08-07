@@ -174,9 +174,54 @@ class _ResultsPageState extends State<ResultsPage> {
                       children: grouped.entries.map((entry) {
                         final list = entry.value;
                         final first = list.first;
+                        double internal1 = 0;
+                        double internal2 = 0;
+                        double external = 0;
+
+                        bool isTheory = true;
+
+                        for (final item in list) {
+
+                          if (item["type"] == "Lab") {
+                            isTheory = false;
+                          }
+
+                          switch (item["exam"]) {
+
+                            case "Mid 1":
+                              internal1 = (item["marks"] as num).toDouble();
+                              break;
+
+                            case "Mid 2":
+                              internal2 = (item["marks"] as num).toDouble();
+                              break;
+
+                            case "Sem External":
+                              external = (item["marks"] as num).toDouble();
+                              break;
+
+                            case "Lab Internal 1":
+                              internal1 = (item["marks"] as num).toDouble();
+                              break;
+
+                            case "Lab Internal 2":
+                              internal2 = (item["marks"] as num).toDouble();
+                              break;
+
+                            case "Lab External":
+                              external = (item["marks"] as num).toDouble();
+                              break;
+                          }
+                        }
+
+                        final average = (internal1 + internal2) / 2;
+                        final total = average + external;
+                        final pass = average >= 14 && total >= 40;
 
                         return Card(
-
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : Colors.white,
                           margin: const EdgeInsets.only(bottom: 15),
 
                           child: Padding(
@@ -203,10 +248,42 @@ class _ResultsPageState extends State<ResultsPage> {
                                   "Subject Code : ${first["subjectCode"]}",
                                 ),
 
-                                const SizedBox(height: 10),
+                                const SizedBox(height: 12),
 
-                                const Text(
-                                  "Result calculation coming in Part 2",
+                                Text(
+                                  isTheory
+                                      ? "Average Mid : ${average.toStringAsFixed(1)}"
+                                      : "Average Internal : ${average.toStringAsFixed(1)}",
+                                ),
+
+                                Text(
+                                  isTheory
+                                      ? "Semester External : $external"
+                                      : "Lab External : $external",
+                                ),
+
+                                Text(
+                                  "Total : ${total.toStringAsFixed(1)}",
+                                ),
+
+                                const SizedBox(height: 8),
+
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: pass ? Colors.green : Colors.red,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    pass ? "PASS" : "FAIL",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
 
                               ],
