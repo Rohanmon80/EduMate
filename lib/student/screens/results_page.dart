@@ -145,7 +145,13 @@ class _ResultsPageState extends State<ResultsPage> {
             else
               Expanded(
 
-                child: StreamBuilder<QuerySnapshot>(
+                child: !creditsLoaded
+
+                    ? const Center(
+                  child: CircularProgressIndicator(),
+                )
+
+                    : StreamBuilder<QuerySnapshot>(
 
                   stream: FirebaseFirestore.instance
 
@@ -201,9 +207,8 @@ class _ResultsPageState extends State<ResultsPage> {
                     }
                     double totalCreditPoints = 0;
                     double totalCredits = 0;
-                    return ListView(
+                    final widgets = grouped.entries.map((entry) {
 
-                      children: grouped.entries.map((entry) {
                         final list = entry.value;
                         final first = list.first;
                         double internal1 = 0;
@@ -273,6 +278,11 @@ class _ResultsPageState extends State<ResultsPage> {
                             gradePoint = 5;
                           }
                         }
+                        final credits =
+                            subjectCredits[first["subjectCode"]] ?? 0;
+
+                        totalCredits += credits;
+                        totalCreditPoints += credits * gradePoint;
 
                         return Card(
                           color: isDark
@@ -334,23 +344,9 @@ class _ResultsPageState extends State<ResultsPage> {
                                 Text(
                                   "Grade Point : $gradePoint",
                                 ),
-
-                                Builder(
-                                  builder: (context) {
-
-                                    final credits =
-                                        subjectCredits[first["subjectCode"]] ?? 0;
-
-                                    totalCredits += credits;
-                                    totalCreditPoints += credits * gradePoint;
-
-                                    return Text(
-                                      "Credits : $credits",
-                                    );
-                                  },
+                                Text(
+                                  "Credits : $credits",
                                 ),
-
-
 
                                 Container(
                                   padding: const EdgeInsets.symmetric(
@@ -377,8 +373,44 @@ class _ResultsPageState extends State<ResultsPage> {
                           ),
 
                         );
-                      }).toList(),
+                      }).toList();
+                    final sgpa = totalCredits == 0
+                    ? 0
+                        : totalCreditPoints / totalCredits;
 
+                    widgets.add(
+                    Card(
+                    color: Colors.indigo,
+                    margin: const EdgeInsets.only(top: 20),
+                    child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                    children: [
+                    const Text(
+                    "Semester GPA",
+                    style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                    sgpa.toStringAsFixed(2),
+                    style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    ),
+                    ),
+                    ],
+                    ),
+                    ),
+                    ),
+                    );
+
+                    return ListView(
+                    children: widgets,
                     );
 
                   },
