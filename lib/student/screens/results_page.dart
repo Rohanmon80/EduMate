@@ -12,8 +12,37 @@ class ResultsPage extends StatefulWidget {
 }
 
 class _ResultsPageState extends State<ResultsPage> {
+  Map<String, double> subjectCredits = {};
+  bool creditsLoaded = false;
   final SubjectService subjectService = SubjectService();
   int? selectedSemester;
+  @override
+  void initState() {
+    super.initState();
+    loadCredits();
+  }
+  Future<void> loadCredits() async {
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection("subjects")
+        .get();
+
+    subjectCredits.clear();
+
+    for (final doc in snapshot.docs) {
+
+      final data = doc.data();
+
+      subjectCredits[data["subjectCode"]] =
+          (data["credits"] as num).toDouble();
+    }
+
+    if (mounted) {
+      setState(() {
+        creditsLoaded = true;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -305,13 +334,12 @@ class _ResultsPageState extends State<ResultsPage> {
                                 Text(
                                   "Grade Point : $gradePoint",
                                 ),
-                                FutureBuilder<double>(
-                                  future: subjectService.getCredits(
-                                    first["subjectCode"],
-                                  ),
-                                  builder: (context, snapshot) {
 
-                                    final credits = snapshot.data ?? 0;
+                                Builder(
+                                  builder: (context) {
+
+                                    final credits =
+                                        subjectCredits[first["subjectCode"]] ?? 0;
 
                                     totalCredits += credits;
                                     totalCreditPoints += credits * gradePoint;
