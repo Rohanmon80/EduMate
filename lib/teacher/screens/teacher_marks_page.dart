@@ -591,6 +591,7 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
 
       "subjectCode": selectedSubject,
       "subjectName": selectedSubjectName,
+      "type": subjectType,
 
       "exam": exam,
       "marks": marks,

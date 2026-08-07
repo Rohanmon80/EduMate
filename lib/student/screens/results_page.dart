@@ -1,5 +1,5 @@
 import 'dart:ui';
-
+import '../../services/subject_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,6 +12,7 @@ class ResultsPage extends StatefulWidget {
 }
 
 class _ResultsPageState extends State<ResultsPage> {
+  final SubjectService subjectService = SubjectService();
   int? selectedSemester;
 
   @override
@@ -169,6 +170,8 @@ class _ResultsPageState extends State<ResultsPage> {
 
                       grouped[data["subjectCode"]]!.add(data);
                     }
+                    double totalCreditPoints = 0;
+                    double totalCredits = 0;
                     return ListView(
 
                       children: grouped.entries.map((entry) {
@@ -217,6 +220,30 @@ class _ResultsPageState extends State<ResultsPage> {
                         final average = (internal1 + internal2) / 2;
                         final total = average + external;
                         final pass = average >= 14 && total >= 40;
+                        String grade = "F";
+                        int gradePoint = 0;
+
+                        if (pass) {
+                          if (total >= 90) {
+                            grade = "O";
+                            gradePoint = 10;
+                          } else if (total >= 80) {
+                            grade = "A+";
+                            gradePoint = 9;
+                          } else if (total >= 70) {
+                            grade = "A";
+                            gradePoint = 8;
+                          } else if (total >= 60) {
+                            grade = "B+";
+                            gradePoint = 7;
+                          } else if (total >= 50) {
+                            grade = "B";
+                            gradePoint = 6;
+                          } else {
+                            grade = "C";
+                            gradePoint = 5;
+                          }
+                        }
 
                         return Card(
                           color: isDark
@@ -268,6 +295,35 @@ class _ResultsPageState extends State<ResultsPage> {
 
                                 const SizedBox(height: 8),
 
+                                Text(
+                                  "Grade : $grade",
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+
+                                Text(
+                                  "Grade Point : $gradePoint",
+                                ),
+                                FutureBuilder<double>(
+                                  future: subjectService.getCredits(
+                                    first["subjectCode"],
+                                  ),
+                                  builder: (context, snapshot) {
+
+                                    final credits = snapshot.data ?? 0;
+
+                                    totalCredits += credits;
+                                    totalCreditPoints += credits * gradePoint;
+
+                                    return Text(
+                                      "Credits : $credits",
+                                    );
+                                  },
+                                ),
+
+
+
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -296,6 +352,7 @@ class _ResultsPageState extends State<ResultsPage> {
                       }).toList(),
 
                     );
+
                   },
 
                 ),

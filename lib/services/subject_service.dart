@@ -62,4 +62,14 @@ class SubjectService {
         .doc(subjectCode)
         .update(data);
   }
+  Future<double> getCredits(String subjectCode) async {
+    final doc = await _firestore
+        .collection(collection)
+        .doc(subjectCode)
+        .get();
+
+    if (!doc.exists) return 0;
+
+    return (doc["credits"] as num).toDouble();
+  }
 }
