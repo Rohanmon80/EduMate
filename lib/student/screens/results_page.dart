@@ -15,13 +15,12 @@ class _ResultsPageState extends State<ResultsPage> {
   int? selectedSemester;
 
   @override
-  Widget build(
-      BuildContext context){
+  Widget build(BuildContext context) {
+    final isDark =
 
-    final isDark=
-
-        Theme.of(context)
-            .brightness==
+        Theme
+            .of(context)
+            .brightness ==
 
             Brightness.dark;
 
@@ -44,7 +43,7 @@ class _ResultsPageState extends State<ResultsPage> {
         backgroundColor:
         Colors.transparent,
 
-        elevation:0,
+        elevation: 0,
 
         title:
         const Text(
@@ -76,33 +75,30 @@ class _ResultsPageState extends State<ResultsPage> {
 
                 8,
 
-                    (i)=>DropdownMenuItem(
+                    (i) =>
+                    DropdownMenuItem(
 
-                  value: i+1,
+                      value: i + 1,
 
-                  child: Text(
-                    "Semester ${i+1}",
-                  ),
+                      child: Text(
+                        "Semester ${i + 1}",
+                      ),
 
-                ),
+                    ),
 
               ),
 
-              onChanged: (value){
-
+              onChanged: (value) {
                 setState(() {
-
-                  selectedSemester=value;
-
+                  selectedSemester = value;
                 });
-
               },
 
             ),
 
-            const SizedBox(height:20),
+            const SizedBox(height: 20),
 
-            if(selectedSemester==null)
+            if(selectedSemester == null)
 
               const Expanded(
 
@@ -117,7 +113,6 @@ class _ResultsPageState extends State<ResultsPage> {
               )
 
             else
-
               Expanded(
 
                 child: StreamBuilder<QuerySnapshot>(
@@ -144,33 +139,27 @@ class _ResultsPageState extends State<ResultsPage> {
 
                       .snapshots(),
 
-                  builder:(context,snapshot){
-
-                    if(!snapshot.hasData){
-
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
                       return const Center(
                         child:
                         CircularProgressIndicator(),
                       );
-
                     }
 
-                    if(snapshot.data!.docs.isEmpty){
-
+                    if (snapshot.data!.docs.isEmpty) {
                       return const Center(
                         child:
                         Text(
                           "No Results Released",
                         ),
                       );
-
                     }
                     final docs = snapshot.data!.docs;
 
                     Map<String, List<Map<String, dynamic>>> grouped = {};
 
                     for (final doc in docs) {
-
                       final data = doc.data() as Map<String, dynamic>;
 
                       grouped.putIfAbsent(
@@ -179,12 +168,10 @@ class _ResultsPageState extends State<ResultsPage> {
                       );
 
                       grouped[data["subjectCode"]]!.add(data);
-
                     }
                     return ListView(
 
                       children: grouped.entries.map((entry) {
-
                         final list = entry.value;
                         final first = list.first;
 
@@ -229,11 +216,9 @@ class _ResultsPageState extends State<ResultsPage> {
                           ),
 
                         );
-
                       }).toList(),
 
                     );
-
                   },
 
                 ),
@@ -247,4 +232,4 @@ class _ResultsPageState extends State<ResultsPage> {
       ),
     );
   }
-
+}

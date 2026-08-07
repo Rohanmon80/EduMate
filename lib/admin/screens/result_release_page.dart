@@ -24,8 +24,14 @@ class _ResultReleasePageState
 
   @override
   Widget build(BuildContext context) {
+    final isDark =
+        Theme.of(context).brightness ==
+            Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDark
+          ? const Color(0xFF081120)
+          : const Color(0xFFF4F8FC),
 
       appBar: AppBar(
         title: const Text("Result Release"),
@@ -74,6 +80,7 @@ class _ResultReleasePageState
           }
 
           int releasedSubjects = 0;
+          int pendingSubjects = 0;
 
 
           for (final entry in grouped.entries) {
@@ -107,7 +114,14 @@ class _ResultReleasePageState
                         width: 170,
                         child: DropdownButtonFormField<String>(
                           value: selectedDepartment,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
+
+                            filled: true,
+
+                            fillColor:
+                            isDark
+                                ? const Color(0xFF1E293B)
+                                : Colors.white,
                             labelText: "Department",
                             border: OutlineInputBorder(),
                           ),
@@ -124,12 +138,45 @@ class _ResultReleasePageState
                           },
                         ),
                       ),
+                      SizedBox(
+                        width: 150,
+                        child: DropdownButtonFormField<String>(
+                          value: selectedYear,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: isDark
+                                ? const Color(0xFF1E293B)
+                                : Colors.white,
+                            labelText: "Year",
+                            border: const OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: "All", child: Text("All")),
+                            DropdownMenuItem(value: "1st", child: Text("1st")),
+                            DropdownMenuItem(value: "2nd", child: Text("2nd")),
+                            DropdownMenuItem(value: "3rd", child: Text("3rd")),
+                            DropdownMenuItem(value: "4th", child: Text("4th")),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedYear = value!;
+                            });
+                          },
+                        ),
+                      ),
 
                       SizedBox(
                         width: 120,
                         child: DropdownButtonFormField<int>(
                           value: selectedSemester,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
+
+                            filled: true,
+
+                            fillColor:
+                            isDark
+                                ? const Color(0xFF1E293B)
+                                : Colors.white,
                             labelText: "Semester",
                             border: OutlineInputBorder(),
                           ),
@@ -141,6 +188,34 @@ class _ResultReleasePageState
                           onChanged: (value) {
                             setState(() {
                               selectedSemester = value!;
+                            });
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 170,
+                        child: DropdownButtonFormField<String>(
+                          value: selectedExam,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: isDark
+                                ? const Color(0xFF1E293B)
+                                : Colors.white,
+                            labelText: "Exam",
+                            border: const OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: "All", child: Text("All")),
+                            DropdownMenuItem(value: "Mid 1", child: Text("Mid 1")),
+                            DropdownMenuItem(value: "Mid 2", child: Text("Mid 2")),
+                            DropdownMenuItem(value: "Sem External", child: Text("Sem External")),
+                            DropdownMenuItem(value: "Lab Internal 1", child: Text("Lab Internal 1")),
+                            DropdownMenuItem(value: "Lab Internal 2", child: Text("Lab Internal 2")),
+                            DropdownMenuItem(value: "Lab External", child: Text("Lab External")),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedExam = value!;
                             });
                           },
                         ),
@@ -171,7 +246,9 @@ class _ResultReleasePageState
 
                       icon: Icons.pending_actions,
 
-                      color: Colors.orange,
+                      color: isDark
+                          ? const Color(0xFF1E293B)
+                          : Colors.white,
 
                     ),
 
@@ -183,7 +260,9 @@ class _ResultReleasePageState
 
                       icon: Icons.check_circle,
 
-                      color: Colors.green,
+                      color: isDark
+                          ? const Color(0xFF1E293B)
+                          : Colors.white,
 
                     ),
 
@@ -203,7 +282,9 @@ class _ResultReleasePageState
 
                           icon: Icons.person,
 
-                          color: Colors.blue,
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : Colors.white,
 
                         );
 
@@ -227,7 +308,9 @@ class _ResultReleasePageState
 
                           icon: Icons.warning,
 
-                          color: Colors.red,
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : Colors.white,
 
                         );
 
@@ -259,9 +342,17 @@ class _ResultReleasePageState
                         first["department"] != selectedDepartment) {
                       return const SizedBox.shrink();
                     }
+                    if (selectedYear != "All" &&
+                        first["year"] != selectedYear) {
+                      return const SizedBox.shrink();
+                    }
 
                     if (selectedSemester != 0 &&
                         first["semester"] != selectedSemester) {
+                      return const SizedBox.shrink();
+                    }
+                    if (selectedExam != "All" &&
+                        first["exam"] != selectedExam) {
                       return const SizedBox.shrink();
                     }
 
@@ -271,9 +362,13 @@ class _ResultReleasePageState
 
                     return Card(
 
-                      margin: const EdgeInsets.all(12),
+                        color: isDark
+                            ? const Color(0xFF1E293B)
+                            : Colors.white,
 
-                      child: Padding(
+                        margin: const EdgeInsets.all(12),
+
+                        child: Padding(
 
                         padding: const EdgeInsets.all(16),
 

@@ -78,7 +78,15 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark =
+        Theme.of(context).brightness ==
+            Brightness.dark;
     return Scaffold(
+
+      backgroundColor:
+      isDark
+          ? const Color(0xFF081120)
+          : const Color(0xFFF4F8FC),
       appBar: AppBar(
         title: const Text("Edit Subject"),
       ),
@@ -92,7 +100,14 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
             TextField(
               controller: codeController,
               readOnly: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+
+                filled: true,
+
+                fillColor:
+                isDark
+                    ? const Color(0xFF1E293B)
+                    : Colors.white,
                 labelText: "Subject Code",
               ),
             ),
@@ -101,7 +116,14 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
 
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+
+                filled: true,
+
+                fillColor:
+                isDark
+                    ? const Color(0xFF1E293B)
+                    : Colors.white,
                 labelText: "Subject Name",
               ),
             ),
