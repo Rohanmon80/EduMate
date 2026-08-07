@@ -1,106 +1,200 @@
 import 'package:flutter/material.dart';
-
-class MemoSubjectTable extends StatelessWidget {
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/memo_service.dart';
+class MemoSubjectTable extends StatefulWidget {
   const MemoSubjectTable({super.key});
 
   @override
+  State<MemoSubjectTable> createState() => _MemoSubjectTableState();
+}
+
+
+class _MemoSubjectTableState extends State<MemoSubjectTable> {
+  Future<void> loadSubjects() async {
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection("subjects")
+        .get();
+
+    subjectsMap.clear();
+
+    for (final doc in snapshot.docs) {
+
+      final data = doc.data();
+
+      subjectsMap[data["subjectCode"]] = data;
+
+    }
+
+    if (mounted) {
+
+      setState(() {
+
+        subjectsLoaded = true;
+
+      });
+
+    }
+
+  }
+  @override
+  void initState() {
+    super.initState();
+    loadSubjects();
+  }
+  Map<String, Map<String, dynamic>> subjectsMap = {};
+  bool subjectsLoaded = false;
+
+  Future<QuerySnapshot> loadResults() {
+    return FirebaseFirestore.instance
+        .collection("student_marks")
+        .where(
+      "studentId",
+      isEqualTo: FirebaseAuth.instance.currentUser!.uid,
+    )
+        .where(
+      "released",
+      isEqualTo: true,
+    )
+        .get();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Table(
 
-      border: TableBorder.all(
-        color: Colors.black,
-      ),
+    if (!subjectsLoaded) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
 
-      columnWidths: const {
+    return FutureBuilder<QuerySnapshot>(
 
-        0: FlexColumnWidth(1.5),
-        1: FlexColumnWidth(3),
-        2: FlexColumnWidth(1),
-        3: FlexColumnWidth(1),
-        4: FlexColumnWidth(1.2),
+      future: loadResults(),
 
-      },
 
-      children: [
+      builder: (context, snapshot) {
 
-        const TableRow(
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
 
-          decoration: BoxDecoration(
-            color: Color(0xFFE8E8E8),
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Text("No Results Available"),
+          );
+        }
+
+        List<TableRow> rows = [];
+
+        for (final doc in snapshot.data!.docs) {
+
+          final data = doc.data() as Map<String, dynamic>;
+          final subject =
+          subjectsMap[data["subjectCode"]];
+
+          final credits =
+              subject?["credits"]?.toString() ?? "-";
+
+          final type =
+              subject?["type"] ?? "";
+
+          rows.add(
+
+            buildRow(
+
+              data["subjectCode"] ?? "",
+
+              data["subjectName"] ?? "",
+
+              credits,
+
+              calculateGrade(data),
+
+              data["released"] == true
+                  ? "PASS"
+                  : "FAIL",
+
+            ),
+
+          );
+
+        }
+
+        return Table(
+
+          border: TableBorder.all(
+            color: Colors.black,
           ),
+
+          columnWidths: const {
+
+            0: FlexColumnWidth(1.5),
+            1: FlexColumnWidth(3),
+            2: FlexColumnWidth(1),
+            3: FlexColumnWidth(1),
+            4: FlexColumnWidth(1.2),
+
+          },
 
           children: [
 
-            tableHeader("Subject Code"),
-            tableHeader("Subject Name"),
-            tableHeader("Credits"),
-            tableHeader("Grade"),
-            tableHeader("Result"),
+            const TableRow(
+
+              decoration: BoxDecoration(
+                color: Color(0xFFE8E8E8),
+              ),
+
+              children: [
+
+                HeaderCell("Subject Code"),
+                HeaderCell("Subject Name"),
+                HeaderCell("Credits"),
+                HeaderCell("Grade"),
+                HeaderCell("Result"),
+
+              ],
+
+            ),
+
+            ...rows,
 
           ],
 
-        ),
+        );
 
-        buildRow(
-          "AIM501",
-          "Artificial Intelligence",
-          "4",
-          "O",
-          "PASS",
-        ),
-
-        buildRow(
-          "AIM502",
-          "Machine Learning",
-          "3",
-          "A+",
-          "PASS",
-        ),
-
-        buildRow(
-          "AIM503",
-          "DBMS",
-          "3",
-          "A",
-          "PASS",
-        ),
-
-        buildRow(
-          "AIM504",
-          "Computer Networks",
-          "3",
-          "B+",
-          "PASS",
-        ),
-
-      ],
+      },
 
     );
+
   }
+  String calculateGrade(Map<String, dynamic> data) {
 
-  static Widget tableHeader(String text) {
+    final exam = data["exam"] ?? "";
+    final marks = (data["marks"] ?? 0).toDouble();
 
-    return Padding(
+    if (exam == "Mid 1" || exam == "Mid 2") {
 
-      padding: const EdgeInsets.all(10),
+      if (marks >= 27) return "O";
+      if (marks >= 24) return "A+";
+      if (marks >= 21) return "A";
+      if (marks >= 18) return "B+";
+      if (marks >= 15) return "B";
 
-      child: Text(
+      return "F";
+    }
 
-        text,
+    if (marks >= 90) return "O";
+    if (marks >= 80) return "A+";
+    if (marks >= 70) return "A";
+    if (marks >= 60) return "B+";
+    if (marks >= 50) return "B";
+    if (marks >= 40) return "C";
 
-        textAlign: TextAlign.center,
-
-        style: const TextStyle(
-
-          fontWeight: FontWeight.bold,
-
-          fontSize: 15,
-
-        ),
-
-      ),
-
-    );
+    return "F";
   }
 
   static TableRow buildRow(
@@ -128,9 +222,34 @@ class MemoSubjectTable extends StatelessWidget {
       ],
 
     );
+
   }
 
-  static Widget cell(String value) {
+  static Widget cell(String text) {
+
+    return Padding(
+
+      padding: const EdgeInsets.all(10),
+
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+      ),
+
+    );
+
+  }
+
+}
+
+class HeaderCell extends StatelessWidget {
+
+  final String text;
+
+  const HeaderCell(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
 
     return Padding(
 
@@ -138,12 +257,22 @@ class MemoSubjectTable extends StatelessWidget {
 
       child: Text(
 
-        value,
+        text,
 
         textAlign: TextAlign.center,
+
+        style: const TextStyle(
+
+          fontWeight: FontWeight.bold,
+
+          fontSize: 15,
+
+        ),
 
       ),
 
     );
+
   }
+
 }

@@ -4,6 +4,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class MemoService {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  Future<int> getCredits(String subjectCode) async {
+
+    final snapshot = await firestore
+        .collection("subjects")
+        .where("subjectCode", isEqualTo: subjectCode)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) {
+      return 0;
+    }
+
+    return (snapshot.docs.first["credits"] as num).toInt();
+  }
 
   Future<Map<String, dynamic>?> getStudent() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
