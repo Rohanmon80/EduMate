@@ -157,9 +157,16 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
           "Student Marks Management",
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            18,
+            18,
+            18,
+            140,
+          ),
+          keyboardDismissBehavior:
+          ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
 
             // Student Details Card
@@ -444,7 +451,7 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                       "Upload Excel",
                     ),
                     subtitle: const Text(
-                      "Upload marks for one student",
+                      "Upload marks for multiple students",
                     ),
                     trailing: const Icon(
                       Icons.arrow_forward_ios,
@@ -499,59 +506,67 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
 
             const SizedBox(height: 20),
 
-            Expanded(
-              child: loading
-                  ? const Center(
-                child: CircularProgressIndicator(),
-              )
-                  : students.isEmpty
-                  ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.school,
-                      size: 70,
-                      color: Colors.grey,
+                loading
+                    ? const Padding(
+                  padding: EdgeInsets.only(top: 40),
+                  child: Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+                    : students.isEmpty
+                    ? const Padding(
+                  padding: EdgeInsets.only(top: 40),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.school,
+                          size: 70,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 15),
+                        Text(
+                          "Search a student to enter marks",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 15),
-                    Text(
-                      "Search a student to enter marks",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-                  : ListView.builder(
-                itemCount: students.length,
-                itemBuilder: (context, index) {
+                  ),
+                )
+                    : ListView.builder(
+                  shrinkWrap: true,
+                  physics:
+                  const NeverScrollableScrollPhysics(),
+                  itemCount: students.length,
+                  itemBuilder: (context, index) {
+                    final student =
+                    students[index].data()
+                    as Map<String, dynamic>;
 
-                  final student =
-                  students[index].data()
-                  as Map<String, dynamic>;
+                    final uid =
+                        students[index].id;
 
-                  final uid =
-                      students[index].id;
-
-                  marksControllers.putIfAbsent(
-                    uid,
-                        () => TextEditingController(),
-                  );
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: studentCard(
-                      student,
+                    marksControllers.putIfAbsent(
                       uid,
-                      isDark,
-                    ),
-                  );
-                },
-              ),
-            ),
+                          () => TextEditingController(),
+                    );
+
+                    return Padding(
+                      padding:
+                      const EdgeInsets.only(bottom: 10),
+                      child: studentCard(
+                        student,
+                        uid,
+                        isDark,
+                      ),
+                    );
+                  },
+                ),
 
           ],
         ),
@@ -563,85 +578,232 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
     backgroundColor: const Color(0xFF1976D2),
     icon: const Icon(Icons.save),
     label: const Text("Save Manual Marks"),
-      onPressed: students.isEmpty || selectedSubject == null
-    ? null
-        : () async {
-    for (var e in marksControllers.entries) {
-    final marks = int.tryParse(e.value.text);
+        onPressed: students.isEmpty || selectedSubject == null
+            ? null
+            : () async {
+          // --------------------------------------------------------
+          // 1. Validate that every displayed student has marks
+          // --------------------------------------------------------
 
-    if (marks == null) continue;
+          for (final student in students) {
+            final controller =
+            marksControllers[student.id];
 
-    if (marks < 0 || marks > 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Marks must be between 0 and 100"),
-        ),
-      );
-      return;
-    }
-    final student =
-    students.firstWhere((s) => s.id == e.key);
+            if (controller == null ||
+                controller.text.trim().isEmpty) {
+              if (!mounted) return;
 
-    final data =
-    student.data() as Map<String, dynamic>;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: Colors.red,
+                  content: Text(
+                    "Enter marks for all students before saving.",
+                  ),
+                ),
+              );
 
-    await FirebaseFirestore.instance
-        .collection("student_marks")
-        .doc("${e.key}_${selectedSubject}_$exam")
-        .set({
-      "studentId": e.key,
-      "rollNumber": data["rollNumber"],
-      "studentName": data["name"],
+              return;
+            }
 
-      "department": data["department"],
-      "year": data["year"],
-      "semester": data["semester"],
-      "section": data["section"],
+            final marks =
+            int.tryParse(controller.text.trim());
 
-      "subjectCode": selectedSubject,
-      "subjectName": selectedSubjectName,
-      "type": subjectType,
+            if (marks == null ||
+                marks < 0 ||
+                marks > 100) {
+              if (!mounted) return;
 
-      "exam": exam,
-      "marks": marks,
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: Colors.red,
+                  content: Text(
+                    "Marks must be between 0 and 100.",
+                  ),
+                ),
+              );
 
-      "teacherId": teacherUid,
-      "teacherName": teacherName,
+              return;
+            }
+          }
 
-      "released": false,
-      "uploadedAt": FieldValue.serverTimestamp(),
-      "uploadedBy": "teacher",
+          // --------------------------------------------------------
+          // 2. Get subject information ONCE from Firebase
+          // --------------------------------------------------------
 
-    }, SetOptions(merge: true));
-    }
+          final subjectSnapshot =
+          await FirebaseFirestore.instance
+              .collection("subjects")
+              .where(
+            "subjectCode",
+            isEqualTo: selectedSubject,
+          )
+              .limit(1)
+              .get();
 
-    if (!mounted) return;
+          if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-    backgroundColor: Colors.green,
-    content: Text("Marks Uploaded Successfully"),
-    ),
-    );
+          if (subjectSnapshot.docs.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: Colors.red,
+                content: Text(
+                  "Subject $selectedSubject was not found.",
+                ),
+              ),
+            );
 
-    for (final controller in marksControllers.values) {
-      controller.dispose();
-    }
+            return;
+          }
 
-    marksControllers.clear();
+          final subjectData =
+          subjectSnapshot.docs.first.data();
 
-    setState(() {
-      selectedSubject = null;
-      selectedSubjectName = null;
-      students.clear();
-    });
+          // --------------------------------------------------------
+          // 3. Firebase is the source of truth
+          // --------------------------------------------------------
 
-    rollNumberController.clear();
-    },
+          final firebaseSemester =
+          (subjectData["semester"] as num?)
+              ?.toInt();
+
+          final credits =
+          (subjectData["credits"] as num?)
+              ?.toDouble();
+
+          final firebaseSubjectName =
+              subjectData["subjectName"]
+                  ?.toString() ??
+                  "";
+
+          final firebaseSubjectType =
+              subjectData["type"]
+                  ?.toString() ??
+                  "";
+
+          if (firebaseSemester == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                backgroundColor: Colors.red,
+                content: Text(
+                  "Selected subject does not have a valid semester.",
+                ),
+              ),
+            );
+
+            return;
+          }
+
+          // --------------------------------------------------------
+          // 4. Save each student's marks
+          // --------------------------------------------------------
+
+          for (final student in students) {
+            final uid = student.id;
+
+            final controller =
+            marksControllers[uid]!;
+
+            final marks =
+            int.parse(
+              controller.text.trim(),
+            );
+
+            final data =
+            student.data()
+            as Map<String, dynamic>;
+
+            // Keep manual and Excel document IDs consistent.
+            final safeExam =
+            exam.replaceAll(
+              RegExp(r'[^a-zA-Z0-9]+'),
+              '_',
+            );
+
+            const safeCategory = "Regular";
+
+            final documentId =
+                "${uid}_${selectedSubject}_${safeExam}_$safeCategory";
+
+            await FirebaseFirestore.instance
+                .collection("student_marks")
+                .doc(documentId)
+                .set(
+              {
+                // Student information
+                "studentId": uid,
+                "rollNumber": data["rollNumber"],
+                "studentName": data["name"],
+                "department": data["department"],
+                "year": data["year"],
+                "section": data["section"],
+
+                // IMPORTANT:
+                // Semester comes from Firebase SUBJECT.
+                "semester": firebaseSemester,
+
+                // Subject information from Firebase
+                "subjectCode": selectedSubject,
+                "subjectName": firebaseSubjectName,
+                "type": firebaseSubjectType,
+                "credits": credits,
+
+                // Exam information
+                "exam": exam,
+                "examCategory": "Regular",
+                "marks": marks,
+
+                // Teacher information
+                "teacherId": teacherUid,
+                "teacherName": teacherName,
+
+                // Status
+                "released": false,
+                "uploadedAt":
+                FieldValue.serverTimestamp(),
+                "uploadedBy": "teacher",
+                "uploadMethod": "manual",
+              },
+              SetOptions(merge: true),
+            );
+          }
+
+          // --------------------------------------------------------
+          // 5. Success
+          // --------------------------------------------------------
+
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.green,
+              content: Text(
+                "Marks uploaded successfully.",
+              ),
+            ),
+          );
+
+          for (final controller
+          in marksControllers.values) {
+            controller.dispose();
+          }
+
+          marksControllers.clear();
+
+          setState(() {
+            selectedSubject = null;
+            selectedSubjectName = null;
+            subjectType = "";
+            exam = "Mid 1";
+            students.clear();
+          });
+
+          rollNumberController.clear();
+        },
     ),
     ),
     );
   }
+
   @override
   void initState() {
     super.initState();

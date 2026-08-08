@@ -1,5 +1,3 @@
-import 'dart:ui';
-import '../../services/subject_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,417 +10,730 @@ class ResultsPage extends StatefulWidget {
 }
 
 class _ResultsPageState extends State<ResultsPage> {
-  Map<String, double> subjectCredits = {};
-  bool creditsLoaded = false;
-  final SubjectService subjectService = SubjectService();
   int? selectedSemester;
-  @override
-  void initState() {
-    super.initState();
-    loadCredits();
+
+  // ============================================================
+  // GET CURRENT STUDENT ID
+  // ============================================================
+
+  String? get studentId {
+    return FirebaseAuth.instance.currentUser?.uid;
   }
-  Future<void> loadCredits() async {
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection("subjects")
-        .get();
+  // ============================================================
+  // GRADE CALCULATION
+  // ============================================================
 
-    subjectCredits.clear();
+  Map<String, dynamic> calculateGrade({
+    required double total,
+    required double average,
+  }) {
+    // Same pass rule used by your previous ResultsPage.
+    final pass = average >= 14 && total >= 40;
 
-    for (final doc in snapshot.docs) {
+    String grade = "F";
+    int gradePoint = 0;
 
-      final data = doc.data();
-
-      subjectCredits[data["subjectCode"]] =
-          (data["credits"] as num).toDouble();
+    if (pass) {
+      if (total >= 90) {
+        grade = "O";
+        gradePoint = 10;
+      } else if (total >= 80) {
+        grade = "A+";
+        gradePoint = 9;
+      } else if (total >= 70) {
+        grade = "A";
+        gradePoint = 8;
+      } else if (total >= 60) {
+        grade = "B+";
+        gradePoint = 7;
+      } else if (total >= 50) {
+        grade = "B";
+        gradePoint = 6;
+      } else {
+        grade = "C";
+        gradePoint = 5;
+      }
     }
 
-    if (mounted) {
-      setState(() {
-        creditsLoaded = true;
-      });
-    }
+    return {
+      "pass": pass,
+      "grade": grade,
+      "gradePoint": gradePoint,
+    };
   }
+
+  // ============================================================
+  // BUILD SUBJECT RESULT
+  // ============================================================
+
+  Map<String, dynamic> buildSubjectResult(
+      List<Map<String, dynamic>> marks,
+      ) {
+    double internal1 = 0;
+    double internal2 = 0;
+    double external = 0;
+
+    bool isLab = false;
+
+    for (final item in marks) {
+      final type =
+          item["type"]?.toString() ?? "";
+
+      if (type.toLowerCase() == "lab") {
+        isLab = true;
+      }
+
+      final exam =
+          item["exam"]?.toString() ?? "";
+
+      final mark =
+          (item["marks"] as num?)
+              ?.toDouble() ??
+              0;
+
+      switch (exam) {
+        case "Mid 1":
+        case "Lab Internal 1":
+          internal1 = mark;
+          break;
+
+        case "Mid 2":
+        case "Lab Internal 2":
+          internal2 = mark;
+          break;
+
+        case "Sem External":
+        case "Lab External":
+          external = mark;
+          break;
+      }
+    }
+
+    final average =
+        (internal1 + internal2) / 2;
+
+    final total =
+        average + external;
+
+    final gradeData =
+    calculateGrade(
+      total: total,
+      average: average,
+    );
+
+    // IMPORTANT:
+    // Credits come from student_marks.
+    // They were originally taken from Firebase subjects.
+    double credits = 0;
+
+    for (final item in marks) {
+      final value =
+      (item["credits"] as num?)
+          ?.toDouble();
+
+      if (value != null) {
+        credits = value;
+        break;
+      }
+    }
+
+    final first = marks.first;
+
+    return {
+      "subjectCode":
+      first["subjectCode"]?.toString() ?? "",
+
+      "subjectName":
+      first["subjectName"]?.toString() ?? "",
+
+      "type":
+      first["type"]?.toString() ?? "",
+
+      "credits": credits,
+
+      "average": average,
+
+      "external": external,
+
+      "total": total,
+
+      "grade":
+      gradeData["grade"],
+
+      "gradePoint":
+      gradeData["gradePoint"],
+
+      "pass":
+      gradeData["pass"],
+
+      "semester":
+      (first["semester"] as num?)
+          ?.toInt(),
+    };
+  }
+
+  // ============================================================
+  // BUILD UI
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
     final isDark =
-
-        Theme
-            .of(context)
-            .brightness ==
-
+        Theme.of(context).brightness ==
             Brightness.dark;
 
+    final uid = studentId;
+
     return Scaffold(
-
-      backgroundColor:
-
-      isDark
-
-          ? const Color(
-        0xFF081120,
-      )
-
-          : const Color(
-        0xFFF4F8FC,
-      ),
+      backgroundColor: isDark
+          ? const Color(0xFF081120)
+          : const Color(0xFFF4F8FC),
 
       appBar: AppBar(
-
-        backgroundColor:
-        Colors.transparent,
-
+        backgroundColor: Colors.transparent,
         elevation: 0,
-
-        title:
-        const Text(
-          "Results",
-        ),
+        title: const Text("Results"),
       ),
 
-      body: Padding(
-
+      body: uid == null
+          ? const Center(
+        child: Text(
+          "Please login again.",
+        ),
+      )
+          : Padding(
         padding: const EdgeInsets.all(16),
-
         child: Column(
-
           children: [
+            // ==================================================
+            // SEMESTER DROPDOWN
+            // ==================================================
 
             DropdownButtonFormField<int>(
-
               value: selectedSemester,
 
-              decoration: const InputDecoration(
-
+              decoration:
+              const InputDecoration(
                 labelText: "Semester",
-
-                border: OutlineInputBorder(),
-
+                border:
+                OutlineInputBorder(),
               ),
 
               items: List.generate(
-
                 8,
+                    (index) {
+                  final semester =
+                      index + 1;
 
-                    (i) =>
-                    DropdownMenuItem(
-
-                      value: i + 1,
-
-                      child: Text(
-                        "Semester ${i + 1}",
-                      ),
-
+                  return DropdownMenuItem(
+                    value: semester,
+                    child: Text(
+                      "Semester $semester",
                     ),
-
+                  );
+                },
               ),
 
               onChanged: (value) {
                 setState(() {
-                  selectedSemester = value;
+                  selectedSemester =
+                      value;
                 });
               },
-
             ),
 
             const SizedBox(height: 20),
 
-            if(selectedSemester == null)
-
+            if (selectedSemester ==
+                null)
               const Expanded(
-
                 child: Center(
-
                   child: Text(
                     "Select Semester",
                   ),
-
                 ),
-
               )
-
             else
               Expanded(
-
-                child: !creditsLoaded
-
-                    ? const Center(
-                  child: CircularProgressIndicator(),
-                )
-
-                    : StreamBuilder<QuerySnapshot>(
-
-                  stream: FirebaseFirestore.instance
-
-                      .collection("student_marks")
-
+                child:
+                StreamBuilder<
+                    QuerySnapshot>(
+                  stream:
+                  FirebaseFirestore
+                      .instance
+                      .collection(
+                    "student_marks",
+                  )
                       .where(
                     "studentId",
                     isEqualTo:
-                    FirebaseAuth.instance.currentUser!.uid,
+                    uid,
                   )
-
                       .where(
                     "semester",
-                    isEqualTo: selectedSemester,
+                    isEqualTo:
+                    selectedSemester,
                   )
-
                       .where(
                     "released",
-                    isEqualTo: true,
+                    isEqualTo:
+                    true,
                   )
-
                       .snapshots(),
 
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
+                  builder:
+                      (
+                      context,
+                      snapshot,
+                      ) {
+                    if (snapshot
+                        .connectionState ==
+                        ConnectionState
+                            .waiting) {
                       return const Center(
                         child:
                         CircularProgressIndicator(),
                       );
                     }
 
-                    if (snapshot.data!.docs.isEmpty) {
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          "Unable to load results.\n${snapshot.error}",
+                          textAlign:
+                          TextAlign.center,
+                        ),
+                      );
+                    }
+
+                    if (!snapshot
+                        .hasData) {
                       return const Center(
                         child:
-                        Text(
+                        CircularProgressIndicator(),
+                      );
+                    }
+
+                    final docs =
+                        snapshot
+                            .data!
+                            .docs;
+
+                    if (docs.isEmpty) {
+                      return const Center(
+                        child: Text(
                           "No Results Released",
                         ),
                       );
                     }
-                    final docs = snapshot.data!.docs;
 
-                    Map<String, List<Map<String, dynamic>>> grouped = {};
+                    // ==================================================
+                    // GROUP BY SUBJECT
+                    // ==================================================
 
-                    for (final doc in docs) {
-                      final data = doc.data() as Map<String, dynamic>;
+                    final Map<
+                        String,
+                        List<
+                            Map<
+                                String,
+                                dynamic>>> grouped =
+                    {};
+
+                    for (final doc
+                    in docs) {
+                      final data =
+                      doc.data()
+                      as Map<
+                          String,
+                          dynamic>;
+
+                      final code =
+                          data["subjectCode"]
+                              ?.toString() ??
+                              "";
+
+                      if (code.isEmpty) {
+                        continue;
+                      }
 
                       grouped.putIfAbsent(
-                        data["subjectCode"],
+                        code,
                             () => [],
                       );
 
-                      grouped[data["subjectCode"]]!.add(data);
+                      grouped[code]!
+                          .add(data);
                     }
-                    double totalCreditPoints = 0;
-                    double totalCredits = 0;
-                    final widgets = grouped.entries.map((entry) {
 
-                        final list = entry.value;
-                        final first = list.first;
-                        double internal1 = 0;
-                        double internal2 = 0;
-                        double external = 0;
+                    // ==================================================
+                    // CALCULATE SUBJECT RESULTS
+                    // ==================================================
 
-                        bool isTheory = true;
+                    final subjectResults =
+                    <Map<String, dynamic>>[];
 
-                        for (final item in list) {
+                    for (final entry
+                    in grouped.entries) {
+                      final result =
+                      buildSubjectResult(
+                        entry.value,
+                      );
 
-                          if (item["type"] == "Lab") {
-                            isTheory = false;
-                          }
+                      subjectResults
+                          .add(result);
+                    }
 
-                          switch (item["exam"]) {
+                    // ==================================================
+                    // SGPA
+                    // ==================================================
 
-                            case "Mid 1":
-                              internal1 = (item["marks"] as num).toDouble();
-                              break;
+                    double totalCredits =
+                    0;
 
-                            case "Mid 2":
-                              internal2 = (item["marks"] as num).toDouble();
-                              break;
+                    double totalCreditPoints =
+                    0;
 
-                            case "Sem External":
-                              external = (item["marks"] as num).toDouble();
-                              break;
+                    for (final result
+                    in subjectResults) {
+                      final credits =
+                          (result["credits"]
+                          as num?)
+                              ?.toDouble() ??
+                              0;
 
-                            case "Lab Internal 1":
-                              internal1 = (item["marks"] as num).toDouble();
-                              break;
+                      final gradePoint =
+                          (result[
+                          "gradePoint"]
+                          as num?)
+                              ?.toDouble() ??
+                              0;
 
-                            case "Lab Internal 2":
-                              internal2 = (item["marks"] as num).toDouble();
-                              break;
+                      // Subject credits remain
+                      // fixed regardless of marks.
+                      totalCredits +=
+                          credits;
 
-                            case "Lab External":
-                              external = (item["marks"] as num).toDouble();
-                              break;
-                          }
-                        }
+                      // Failed subject gets
+                      // grade point 0.
+                      totalCreditPoints +=
+                          credits *
+                              gradePoint;
+                    }
 
-                        final average = (internal1 + internal2) / 2;
-                        final total = average + external;
-                        final pass = average >= 14 && total >= 40;
-                        String grade = "F";
-                        int gradePoint = 0;
+                    final sgpa =
+                    totalCredits == 0
+                        ? 0
+                        : totalCreditPoints /
+                        totalCredits;
 
-                        if (pass) {
-                          if (total >= 90) {
-                            grade = "O";
-                            gradePoint = 10;
-                          } else if (total >= 80) {
-                            grade = "A+";
-                            gradePoint = 9;
-                          } else if (total >= 70) {
-                            grade = "A";
-                            gradePoint = 8;
-                          } else if (total >= 60) {
-                            grade = "B+";
-                            gradePoint = 7;
-                          } else if (total >= 50) {
-                            grade = "B";
-                            gradePoint = 6;
-                          } else {
-                            grade = "C";
-                            gradePoint = 5;
-                          }
-                        }
-                        final credits =
-                            subjectCredits[first["subjectCode"]] ?? 0;
-
-                        totalCredits += credits;
-                        totalCreditPoints += credits * gradePoint;
-
-                        return Card(
-                          color: isDark
-                              ? const Color(0xFF1E293B)
-                              : Colors.white,
-                          margin: const EdgeInsets.only(bottom: 15),
-
-                          child: Padding(
-
-                            padding: const EdgeInsets.all(16),
-
-                            child: Column(
-
-                              crossAxisAlignment: CrossAxisAlignment.start,
-
-                              children: [
-
-                                Text(
-                                  first["subjectName"],
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 8),
-
-                                Text(
-                                  "Subject Code : ${first["subjectCode"]}",
-                                ),
-
-                                const SizedBox(height: 12),
-
-                                Text(
-                                  isTheory
-                                      ? "Average Mid : ${average.toStringAsFixed(1)}"
-                                      : "Average Internal : ${average.toStringAsFixed(1)}",
-                                ),
-
-                                Text(
-                                  isTheory
-                                      ? "Semester External : $external"
-                                      : "Lab External : $external",
-                                ),
-
-                                Text(
-                                  "Total : ${total.toStringAsFixed(1)}",
-                                ),
-
-                                const SizedBox(height: 8),
-
-                                Text(
-                                  "Grade : $grade",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-
-                                Text(
-                                  "Grade Point : $gradePoint",
-                                ),
-                                Text(
-                                  "Credits : $credits",
-                                ),
-
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: pass ? Colors.green : Colors.red,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    pass ? "PASS" : "FAIL",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-
-                              ],
-
-                            ),
-
-                          ),
-
-                        );
-                      }).toList();
-                    final sgpa = totalCredits == 0
-                    ? 0
-                        : totalCreditPoints / totalCredits;
-
-                    widgets.add(
-                    Card(
-                    color: Colors.indigo,
-                    margin: const EdgeInsets.only(top: 20),
-                    child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                    children: [
-                    const Text(
-                    "Semester GPA",
-                    style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                    sgpa.toStringAsFixed(2),
-                    style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    ),
-                    ),
-                    ],
-                    ),
-                    ),
-                    ),
-                    );
+                    // ==================================================
+                    // UI
+                    // ==================================================
 
                     return ListView(
-                    children: widgets,
+                      padding:
+                      const EdgeInsets
+                          .only(
+                        bottom: 30,
+                      ),
+
+                      children: [
+                        // ----------------------------------------------
+                        // SEMESTER SUMMARY
+                        // ----------------------------------------------
+
+                        Card(
+                          margin:
+                          const EdgeInsets
+                              .only(
+                            bottom: 20,
+                          ),
+
+                          color: isDark
+                              ? const Color(
+                            0xFF1E293B,
+                          )
+                              : Colors.white,
+
+                          child: Padding(
+                            padding:
+                            const EdgeInsets
+                                .all(
+                              20,
+                            ),
+
+                            child: Column(
+                              children: [
+                                const Text(
+                                  "Semester GPA",
+                                  style:
+                                  TextStyle(
+                                    fontSize:
+                                    18,
+                                    fontWeight:
+                                    FontWeight
+                                        .bold,
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                  height: 8,
+                                ),
+
+                                Text(
+                                  sgpa.toStringAsFixed(
+                                    2,
+                                  ),
+
+                                  style:
+                                  const TextStyle(
+                                    fontSize:
+                                    34,
+                                    fontWeight:
+                                    FontWeight
+                                        .bold,
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                  height: 8,
+                                ),
+
+                                Text(
+                                  "Total Credits: "
+                                      "${totalCredits.toStringAsFixed(1)}",
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // ----------------------------------------------
+                        // SUBJECT CARDS
+                        // ----------------------------------------------
+
+                        ...subjectResults.map(
+                              (result) {
+                            final pass =
+                                result[
+                                "pass"] ==
+                                    true;
+
+                            final grade =
+                            result[
+                            "grade"];
+
+                            final gradePoint =
+                            result[
+                            "gradePoint"];
+
+                            final credits =
+                            result[
+                            "credits"];
+
+                            final average =
+                            result[
+                            "average"];
+
+                            final external =
+                            result[
+                            "external"];
+
+                            final total =
+                            result[
+                            "total"];
+
+                            final subjectName =
+                            result[
+                            "subjectName"];
+
+                            final subjectCode =
+                            result[
+                            "subjectCode"];
+
+                            final type =
+                            result[
+                            "type"];
+
+                            return Card(
+                              margin:
+                              const EdgeInsets
+                                  .only(
+                                bottom: 15,
+                              ),
+
+                              color: isDark
+                                  ? const Color(
+                                0xFF1E293B,
+                              )
+                                  : Colors.white,
+
+                              child:
+                              Padding(
+                                padding:
+                                const EdgeInsets
+                                    .all(
+                                  16,
+                                ),
+
+                                child:
+                                Column(
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment
+                                      .start,
+
+                                  children: [
+                                    Text(
+                                      subjectName
+                                          .toString(),
+
+                                      style:
+                                      const TextStyle(
+                                        fontSize:
+                                        18,
+                                        fontWeight:
+                                        FontWeight
+                                            .bold,
+                                      ),
+                                    ),
+
+                                    const SizedBox(
+                                      height: 6,
+                                    ),
+
+                                    Text(
+                                      "Subject Code: "
+                                          "$subjectCode",
+                                    ),
+
+                                    const SizedBox(
+                                      height: 12,
+                                    ),
+
+                                    Text(
+                                      type
+                                          .toString()
+                                          .toLowerCase() ==
+                                          "lab"
+                                          ? "Average Internal: "
+                                          "${average.toStringAsFixed(1)}"
+                                          : "Average Mid: "
+                                          "${average.toStringAsFixed(1)}",
+                                    ),
+
+                                    const SizedBox(
+                                      height: 4,
+                                    ),
+
+                                    Text(
+                                      type
+                                          .toString()
+                                          .toLowerCase() ==
+                                          "lab"
+                                          ? "Lab External: $external"
+                                          : "Semester External: $external",
+                                    ),
+
+                                    const SizedBox(
+                                      height: 4,
+                                    ),
+
+                                    Text(
+                                      "Total: "
+                                          "${total.toStringAsFixed(1)}",
+                                    ),
+
+                                    const SizedBox(
+                                      height: 8,
+                                    ),
+
+                                    Text(
+                                      "Grade: $grade",
+                                      style:
+                                      const TextStyle(
+                                        fontWeight:
+                                        FontWeight
+                                            .bold,
+                                      ),
+                                    ),
+
+                                    const SizedBox(
+                                      height: 4,
+                                    ),
+
+                                    Text(
+                                      "Grade Point: "
+                                          "$gradePoint",
+                                    ),
+
+                                    const SizedBox(
+                                      height: 4,
+                                    ),
+
+                                    Text(
+                                      "Credits: "
+                                          "$credits",
+                                    ),
+
+                                    const SizedBox(
+                                      height: 12,
+                                    ),
+
+                                    Container(
+                                      padding:
+                                      const EdgeInsets
+                                          .symmetric(
+                                        horizontal:
+                                        12,
+                                        vertical:
+                                        6,
+                                      ),
+
+                                      decoration:
+                                      BoxDecoration(
+                                        color: pass
+                                            ? Colors
+                                            .green
+                                            : Colors
+                                            .red,
+
+                                        borderRadius:
+                                        BorderRadius
+                                            .circular(
+                                          20,
+                                        ),
+                                      ),
+
+                                      child:
+                                      Text(
+                                        pass
+                                            ? "PASS"
+                                            : "FAIL",
+
+                                        style:
+                                        const TextStyle(
+                                          color:
+                                          Colors.white,
+                                          fontWeight:
+                                          FontWeight
+                                              .bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     );
-
                   },
-
                 ),
-
               ),
-
           ],
-
         ),
-
       ),
     );
   }
