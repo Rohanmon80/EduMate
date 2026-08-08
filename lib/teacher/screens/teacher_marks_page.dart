@@ -5,7 +5,7 @@ import '../../services/excel_service.dart';
 import 'excel_preview_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../services/excel_subject_service.dart';
+
 class TeacherMarksPage extends StatefulWidget {
 
   const TeacherMarksPage({super.key});
@@ -32,8 +32,7 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
   final rollNumberController = TextEditingController();
   final ExcelService excelService = ExcelService();
 
-  final ExcelSubjectService templateService =
-  ExcelSubjectService();
+
 
   Map<String,
       TextEditingController>
@@ -431,57 +430,67 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
                     title: const Text("Download Excel Template"),
                     trailing: const Icon(Icons.arrow_forward_ios),
                     onTap: () async {
-                      await templateService.downloadTemplate();
+                      await excelService.downloadMarksTemplate();
                     },
                   ),
 
                   const Divider(),
 
                   ListTile(
-                    leading: const Icon(Icons.upload_file),
-                    title: const Text("Upload Excel"),
-                    trailing: const Icon(Icons.arrow_forward_ios),
+                    leading: const Icon(
+                      Icons.upload_file,
+                    ),
+                    title: const Text(
+                      "Upload Excel",
+                    ),
+                    subtitle: const Text(
+                      "Upload marks for one student",
+                    ),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                    ),
                     onTap: () async {
+                      try {
+                        final rows =
+                        await excelService.pickExcel();
 
-                      if(selectedSubject==null){
+                        if (rows.isEmpty) {
+                          return;
+                        }
 
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        if (!context.mounted) {
+                          return;
+                        }
 
-                          const SnackBar(
-
-                            content: Text(
-                              "Please select a subject first",
-                            ),
-
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ExcelPreviewPage(
+                                  rows: rows,
+                                  teacherId:
+                                  teacherUid,
+                                  teacherName:
+                                  teacherName,
+                                ),
                           ),
-
                         );
+                      } catch (e) {
+                        if (!context.mounted) {
+                          return;
+                        }
 
-                        return;
-
-                      }
-
-                      final rows =
-                      await excelService.pickExcel();
-
-                      if (rows.isEmpty) return;
-
-                      if (!context.mounted) return;
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ExcelPreviewPage(
-                            rows: rows,
-                            subjectCode: selectedSubject!,
-                            subjectName: selectedSubjectName!,
-                            exam: exam,
-                            teacherId: teacherUid,
-                            teacherName: teacherName,
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
+                          SnackBar(
+                            backgroundColor:
+                            Colors.red,
+                            content: Text(
+                              "Unable to open Excel file: $e",
+                            ),
                           ),
-                        ),
-                      );
-
+                        );
+                      }
                     },
                   ),
                 ],
@@ -679,8 +688,8 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
 
           decoration: BoxDecoration(
             color: dark
-                ? Colors.white.withOpacity(.08)
-                : Colors.white.withOpacity(.7),
+                ? Colors.white.withValues(alpha: .08)
+                : Colors.white.withValues(alpha: .7),
             borderRadius: BorderRadius.circular(25),
           ),
           child: child,

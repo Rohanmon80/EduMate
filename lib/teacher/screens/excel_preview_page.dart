@@ -1,36 +1,49 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
+
 import '../../services/excel_service.dart';
-class ExcelPreviewPage extends StatelessWidget {
+
+class ExcelPreviewPage extends StatefulWidget {
   final List<List<dynamic>> rows;
-  final String subjectCode;
-  final String subjectName;
-  final String exam;
+
   final String teacherId;
   final String teacherName;
 
   const ExcelPreviewPage({
     super.key,
     required this.rows,
-    required this.subjectCode,
-    required this.subjectName,
-    required this.exam,
     required this.teacherId,
     required this.teacherName,
   });
 
   @override
+  State<ExcelPreviewPage> createState() =>
+      _ExcelPreviewPageState();
+}
+
+class _ExcelPreviewPageState
+    extends State<ExcelPreviewPage> {
+
+  bool uploading = false;
+
+  @override
   Widget build(BuildContext context) {
     final isDark =
-        Theme.of(context).brightness == Brightness.dark;
+        Theme.of(context).brightness ==
+            Brightness.dark;
 
     final headers =
-    rows.isNotEmpty ? rows.first : [];
+    widget.rows.isNotEmpty
+        ? widget.rows.first
+        : [];
 
     final previewRows =
-    rows.length > 11
-        ? rows.sublist(1, 11)
-        : rows.sublist(1);
+    widget.rows.length > 11
+        ? widget.rows.sublist(1, 11)
+        : widget.rows.length > 1
+        ? widget.rows.sublist(1)
+        : [];
 
     return Scaffold(
       backgroundColor: isDark
@@ -40,7 +53,9 @@ class ExcelPreviewPage extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text("Excel Preview"),
+        title: const Text(
+          "Excel Preview",
+        ),
       ),
 
       body: Padding(
@@ -49,11 +64,17 @@ class ExcelPreviewPage extends StatelessWidget {
         child: Column(
           children: [
 
+            // --------------------------------------------------
+            // Excel Summary
+            // --------------------------------------------------
+
             glass(
               isDark,
+
               Column(
                 crossAxisAlignment:
                 CrossAxisAlignment.start,
+
                 children: [
 
                   const Text(
@@ -68,7 +89,7 @@ class ExcelPreviewPage extends StatelessWidget {
                   const SizedBox(height: 12),
 
                   Text(
-                    "Rows : ${rows.length - 1}",
+                    "Rows : ${widget.rows.length > 1 ? widget.rows.length - 1 : 0}",
                   ),
 
                   const SizedBox(height: 5),
@@ -82,11 +103,17 @@ class ExcelPreviewPage extends StatelessWidget {
 
             const SizedBox(height: 20),
 
+            // --------------------------------------------------
+            // Detected Columns
+            // --------------------------------------------------
+
             glass(
               isDark,
+
               Column(
                 crossAxisAlignment:
                 CrossAxisAlignment.start,
+
                 children: [
 
                   const Text(
@@ -104,8 +131,7 @@ class ExcelPreviewPage extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
 
-                    children:
-                    headers
+                    children: headers
                         .map(
                           (e) => Chip(
                         label: Text(
@@ -121,6 +147,10 @@ class ExcelPreviewPage extends StatelessWidget {
 
             const SizedBox(height: 20),
 
+            // --------------------------------------------------
+            // Excel Data Preview
+            // --------------------------------------------------
+
             Expanded(
               child: glass(
                 isDark,
@@ -129,39 +159,44 @@ class ExcelPreviewPage extends StatelessWidget {
                   scrollDirection:
                   Axis.horizontal,
 
-                  child: DataTable(
-                    columns:
-                    headers
-                        .map(
-                          (e) => DataColumn(
-                        label: Text(
-                          e.toString(),
-                        ),
-                      ),
-                    )
-                        .toList(),
-
-                    rows:
-                    previewRows
-                        .map(
-                          (row) =>
-                          DataRow(
-                            cells:
-                            row
-                                .map(
-                                  (cell) =>
-                                  DataCell(
-                                    Text(
-                                      cell
-                                          ?.toString() ??
-                                          "",
-                                    ),
-                                  ),
-                            )
-                                .toList(),
+                  child: SingleChildScrollView(
+                    child: DataTable(
+                      columns: headers
+                          .map(
+                            (e) => DataColumn(
+                          label: Text(
+                            e.toString(),
                           ),
-                    )
-                        .toList(),
+                        ),
+                      )
+                          .toList(),
+
+                      rows: previewRows
+                          .map(
+                            (row) => DataRow(
+                          cells: List.generate(
+                            headers.length,
+                                (index) {
+
+                              final value =
+                              index <
+                                  row.length
+                                  ? row[index]
+                                  : "";
+
+                              return DataCell(
+                                Text(
+                                  value
+                                      ?.toString() ??
+                                      "",
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      )
+                          .toList(),
+                    ),
                   ),
                 ),
               ),
@@ -169,18 +204,24 @@ class ExcelPreviewPage extends StatelessWidget {
 
             const SizedBox(height: 15),
 
+            // --------------------------------------------------
+            // Buttons
+            // --------------------------------------------------
+
             Row(
               children: [
 
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () {
+                    onPressed: uploading
+                        ? null
+                        : () {
                       Navigator.pop(
-                          context);
+                        context,
+                      );
                     },
 
-                    child:
-                    const Text(
+                    child: const Text(
                       "Cancel",
                     ),
                   ),
@@ -192,73 +233,30 @@ class ExcelPreviewPage extends StatelessWidget {
                   child:
                   ElevatedButton.icon(
 
-                    icon: const Icon(
+                    icon: uploading
+                        ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child:
+                      CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color:
+                        Colors.white,
+                      ),
+                    )
+                        : const Icon(
                       Icons.cloud_upload,
                     ),
 
-                    label: const Text(
-                      "Upload",
+                    label: Text(
+                      uploading
+                          ? "Uploading..."
+                          : "Upload",
                     ),
 
-                    onPressed: () async {
-
-                      try {
-
-                        await ExcelService().uploadMarks(
-
-                          rows: rows,
-
-                          subjectCode: subjectCode,
-
-                          subjectName: subjectName,
-
-                          exam: exam,
-
-                          teacherId: teacherId,
-
-                          teacherName: teacherName,
-
-                        );
-
-                        if (!context.mounted) return;
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-
-                          const SnackBar(
-
-                            backgroundColor: Colors.green,
-
-                            content: Text(
-                              "Marks Uploaded Successfully",
-                            ),
-
-                          ),
-
-                        );
-
-                        Navigator.pop(context);
-
-                      } catch (e) {
-
-                        if (!context.mounted) return;
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-
-                          SnackBar(
-
-                            backgroundColor: Colors.red,
-
-                            content: Text(
-                              e.toString(),
-                            ),
-
-                          ),
-
-                        );
-
-                      }
-
-                    },
+                    onPressed: uploading
+                        ? null
+                        : uploadExcel,
                   ),
                 ),
               ],
@@ -269,9 +267,78 @@ class ExcelPreviewPage extends StatelessWidget {
     );
   }
 
+  // ============================================================
+  // Upload Excel
+  // ============================================================
+
+  Future<void> uploadExcel() async {
+
+    setState(() {
+      uploading = true;
+    });
+
+    try {
+
+      await ExcelService().uploadMarks(
+
+        rows: widget.rows,
+
+        teacherId:
+        widget.teacherId,
+
+        teacherName:
+        widget.teacherName,
+
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          backgroundColor:
+          Colors.green,
+          content: Text(
+            "Marks Uploaded Successfully",
+          ),
+        ),
+      );
+
+      Navigator.pop(context);
+
+    } catch (e) {
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          backgroundColor:
+          Colors.red,
+          content: Text(
+            e.toString(),
+          ),
+        ),
+      );
+
+    } finally {
+
+      if (mounted) {
+        setState(() {
+          uploading = false;
+        });
+      }
+    }
+  }
+
+  // ============================================================
+  // Glass UI
+  // ============================================================
+
   Widget glass(
       bool dark,
-      Widget child) {
+      Widget child,
+      ) {
     return ClipRRect(
       borderRadius:
       BorderRadius.circular(25),
@@ -286,10 +353,16 @@ class ExcelPreviewPage extends StatelessWidget {
           padding:
           const EdgeInsets.all(15),
 
-          decoration: BoxDecoration(
+          decoration:
+          BoxDecoration(
             color: dark
-                ? Colors.white.withOpacity(.08)
-                : Colors.white.withOpacity(.7),
+                ? Colors.white
+                .withValues(alpha: .08)
+                : Colors.white
+                .withValues(alpha: .7),
+
+            borderRadius:
+            BorderRadius.circular(25),
           ),
 
           child: child,
