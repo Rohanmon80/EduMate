@@ -50,13 +50,19 @@ class MemoService {
   Future<Map<String, dynamic>?> getSubject(
       String subjectCode) async {
 
-    final doc = await firestore
+    final snapshot = await firestore
         .collection("subjects")
-        .doc(subjectCode)
+        .where(
+      "subjectCode",
+      isEqualTo: subjectCode,
+    )
+        .limit(1)
         .get();
 
-    if (!doc.exists) return null;
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
 
-    return doc.data();
+    return snapshot.docs.first.data();
   }
 }
