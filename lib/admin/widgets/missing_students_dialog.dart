@@ -95,17 +95,20 @@ class MissingStudentsDialog extends StatelessWidget {
             snapshot.data![1] as QuerySnapshot;
 
             final uploaded = marks.docs
-                .map((e) =>
-            (e.data()
-            as Map<String,dynamic>)["rollNumber"])
+                .map((doc) {
+              final data =
+              doc.data() as Map<String, dynamic>;
+              return data["studentId"]?.toString();
+            })
+                .where((id) => id != null && id.isNotEmpty)
                 .toSet();
 
             final uploadedCount =
                 uploaded.length;
 
             final missingCount =
-                students.docs.length -
-                    uploadedCount;
+            (students.docs.length - uploadedCount)
+                .clamp(0, students.docs.length);
 
             return Column(
 
@@ -157,7 +160,7 @@ class MissingStudentsDialog extends StatelessWidget {
                       as Map<String, dynamic>;
 
                       final done =
-                      uploaded.contains(s["rollNumber"]);
+                      uploaded.contains(students.docs[index].id);
 
                       return ListTile(
                         leading: CircleAvatar(
