@@ -6,16 +6,37 @@ class SemesterResultsPage extends StatefulWidget {
   const SemesterResultsPage({super.key});
 
   @override
-  State<SemesterResultsPage> createState() =>
-      _SemesterResultsPageState();
+  State<SemesterResultsPage> createState() => _SemesterResultsPageState();
 }
 
-class _SemesterResultsPageState
-    extends State<SemesterResultsPage> {
+class _SemesterResultsPageState extends State<SemesterResultsPage> {
   int? selectedSemester;
 
   String? get studentId {
     return FirebaseAuth.instance.currentUser?.uid;
+  }
+
+  Future<QuerySnapshot> _loadExpectedSubjects(int semester) async {
+    final uid = studentId;
+
+    if (uid == null) {
+      throw Exception("Student not logged in");
+    }
+
+    final userDoc =
+    await FirebaseFirestore.instance.collection("users").doc(uid).get();
+
+    if (!userDoc.exists) {
+      throw Exception("Student profile not found");
+    }
+
+    final userData = userDoc.data() as Map<String, dynamic>;
+
+    return FirebaseFirestore.instance
+        .collection("subjects")
+        .where("department", isEqualTo: userData["department"])
+        .where("semester", isEqualTo: semester)
+        .get();
   }
 
   // ============================================================
@@ -27,10 +48,7 @@ class _SemesterResultsPageState
     required double external,
     required double total,
   }) {
-    final bool pass =
-        average >= 14 &&
-            external >= 21 &&
-            total >= 40;
+    final bool pass = average >= 14 && external >= 21 && total >= 40;
 
     String grade = "F";
     int gradePoint = 0;
@@ -90,28 +108,20 @@ class _SemesterResultsPageState
     bool hasSupply = false;
 
     for (final item in marks) {
-      subjectCode =
-          item["subjectCode"]?.toString() ?? subjectCode;
+      subjectCode = item["subjectCode"]?.toString() ?? subjectCode;
 
-      subjectName =
-          item["subjectName"]?.toString() ?? subjectName;
+      subjectName = item["subjectName"]?.toString() ?? subjectName;
 
-      subjectType =
-          item["type"]?.toString() ?? subjectType;
+      subjectType = item["type"]?.toString() ?? subjectType;
 
-      final type =
-          item["type"]?.toString().toLowerCase() ?? "";
+      final type = item["type"]?.toString().toLowerCase() ?? "";
 
       if (type == "lab") {
         isLab = true;
       }
 
       final category =
-          item["examCategory"]
-              ?.toString()
-              .trim()
-              .toLowerCase() ??
-              "regular";
+          item["examCategory"]?.toString().trim().toLowerCase() ?? "regular";
 
       final isSupply = category == "supply";
 
@@ -119,15 +129,13 @@ class _SemesterResultsPageState
         hasSupply = true;
       }
 
-      final value =
-      (item["marks"] as num?)?.toDouble();
+      final value = (item["marks"] as num?)?.toDouble();
 
       if (value == null) {
         continue;
       }
 
-      final exam =
-          item["exam"]?.toString().trim() ?? "";
+      final exam = item["exam"]?.toString().trim() ?? "";
 
       // ============================================================
       // THEORY
@@ -146,9 +154,7 @@ class _SemesterResultsPageState
           } else {
             regularInternal2 = value;
           }
-        } else if (
-        exam == "Sem External" ||
-            exam == "External") {
+        } else if (exam == "Sem External" || exam == "External") {
           if (isSupply) {
             supplyExternal = value;
           } else {
@@ -183,8 +189,7 @@ class _SemesterResultsPageState
         }
       }
 
-      final creditValue =
-      (item["credits"] as num?)?.toDouble();
+      final creditValue = (item["credits"] as num?)?.toDouble();
 
       if (creditValue != null) {
         credits = creditValue;
@@ -192,70 +197,55 @@ class _SemesterResultsPageState
     }
 
     // ============================================================
-// SELECT REGULAR RESULT FIRST
-// ============================================================
+    // SELECT REGULAR RESULT FIRST
+    // ============================================================
 
     final double? regularAverage =
-    regularInternal1 != null &&
-        regularInternal2 != null
+    regularInternal1 != null && regularInternal2 != null
         ? (regularInternal1 + regularInternal2) / 2
         : null;
 
     final double? regularTotal =
-    regularAverage != null &&
-        regularExternal != null
+    regularAverage != null && regularExternal != null
         ? regularAverage + regularExternal
         : null;
 
-    final bool regularPassed =
-        regularAverage != null &&
-            regularExternal != null &&
-            regularAverage >= 14 &&
-            regularExternal >= 21 &&
-            regularTotal! >= 40;
+    final bool regularPassed = regularAverage != null &&
+        regularExternal != null &&
+        regularAverage >= 14 &&
+        regularExternal >= 21 &&
+        regularTotal! >= 40;
 
+    // ============================================================
+    // FINAL RESULT
+    //
+    // If Regular passes:
+    //     use Regular marks.
+    //
+    // If Regular fails:
+    //     use Supply marks where available,
+    //     otherwise keep the Regular mark.
+    // ============================================================
 
-// ============================================================
-// FINAL RESULT
-//
-// If Regular passes:
-//     use Regular marks.
-//
-// If Regular fails:
-//     use Supply marks where available,
-//     otherwise keep the Regular mark.
-// ============================================================
-
-    final double? internal1 =
-    regularPassed
+    final double? internal1 = regularPassed
         ? regularInternal1
         : supplyInternal1 ?? regularInternal1;
 
-    final double? internal2 =
-    regularPassed
+    final double? internal2 = regularPassed
         ? regularInternal2
         : supplyInternal2 ?? regularInternal2;
 
     final double? external =
-    regularPassed
-        ? regularExternal
-        : supplyExternal ?? regularExternal;
+    regularPassed ? regularExternal : supplyExternal ?? regularExternal;
 
     final String examCategory =
-    regularPassed
-        ? "Regular"
-        : hasSupply
-        ? "Supply"
-        : "Regular";
+    regularPassed ? "Regular" : hasSupply ? "Supply" : "Regular";
 
+    // ============================================================
+    // MISSING MARKS
+    // ============================================================
 
-// ============================================================
-// MISSING MARKS
-// ============================================================
-
-    if (internal1 == null ||
-        internal2 == null ||
-        external == null) {
+    if (internal1 == null || internal2 == null || external == null) {
       return {
         "subjectCode": subjectCode,
         "subjectName": subjectName,
@@ -273,30 +263,23 @@ class _SemesterResultsPageState
       };
     }
 
+    // ============================================================
+    // FINAL CALCULATION
+    // ============================================================
 
-// ============================================================
-// FINAL CALCULATION
-// ============================================================
+    final average = (internal1 + internal2) / 2;
 
-    final average =
-        (internal1 + internal2) / 2;
+    final total = average + external;
 
-    final total =
-        average + external;
+    // ============================================================
+    // FINAL PASS RULE
+    //
+    // 1. Average Mid >= 14
+    // 2. External >= 21
+    // 3. Average Mid + External >= 40
+    // ============================================================
 
-
-// ============================================================
-// FINAL PASS RULE
-//
-// 1. Average Mid >= 14
-// 2. External >= 21
-// 3. Average Mid + External >= 40
-// ============================================================
-
-    final passed =
-        average >= 14 &&
-            external! >= 21 &&
-            total >= 40;
+    final passed = average >= 14 && external! >= 21 && total >= 40;
 
     // ============================================================
     // GRADE
@@ -355,29 +338,22 @@ class _SemesterResultsPageState
     double totalCreditPoints = 0;
 
     for (final subject in subjects) {
-      final credits =
-          (subject["credits"] as num?)
-              ?.toDouble() ??
-              0;
+      final credits = (subject["credits"] as num?)?.toDouble() ?? 0;
 
-      final gradePoint =
-          (subject["gradePoint"] as num?)
-              ?.toDouble() ??
-              0;
+      final gradePoint = (subject["gradePoint"] as num?)?.toDouble() ?? 0;
 
       totalCredits += credits;
 
-      totalCreditPoints +=
-          credits * gradePoint;
+      totalCreditPoints += credits * gradePoint;
     }
 
     if (totalCredits == 0) {
       return 0;
     }
 
-    return totalCreditPoints /
-        totalCredits;
+    return totalCreditPoints / totalCredits;
   }
+
   Future<List<double>> getCompletedSemesterGPAs() async {
     final uid = studentId;
 
@@ -385,21 +361,13 @@ class _SemesterResultsPageState
       return [];
     }
 
-    final snapshot =
-    await FirebaseFirestore.instance
+    final snapshot = await FirebaseFirestore.instance
         .collection("student_marks")
-        .where(
-      "studentId",
-      isEqualTo: uid,
-    )
-        .where(
-      "released",
-      isEqualTo: true,
-    )
+        .where("studentId", isEqualTo: uid)
+        .where("released", isEqualTo: true)
         .get();
 
-    final Map<int, List<Map<String, dynamic>>>
-    semesterMarks = {};
+    final Map<int, List<Map<String, dynamic>>> semesterMarks = {};
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
@@ -412,28 +380,40 @@ class _SemesterResultsPageState
       }
 
       semesterMarks
-          .putIfAbsent(
-        semester,
-            () => [],
-      )
+          .putIfAbsent(semester, () => [])
           .add(data);
     }
 
     final completedCGPAs = <double>[];
 
-
-
     final sortedSemesters =
     semesterMarks.keys.toList()..sort();
 
-    for (final semester
-    in sortedSemesters) {
-      final Map<String,
-          List<Map<String, dynamic>>>
-      subjects = {};
+    for (final semester in sortedSemesters) {
+      // --------------------------------------------------
+      // GET ALL SUBJECTS CONFIGURED BY ADMIN
+      // --------------------------------------------------
 
-      for (final mark
-      in semesterMarks[semester]!) {
+      final subjectSnapshot =
+      await _loadExpectedSubjects(semester);
+
+      final expectedSubjects =
+          subjectSnapshot.docs;
+
+      if (expectedSubjects.isEmpty) {
+        continue;
+      }
+
+      // --------------------------------------------------
+      // GROUP STUDENT MARKS BY SUBJECT
+      // --------------------------------------------------
+
+      final Map<
+          String,
+          List<Map<String, dynamic>>
+      > subjects = {};
+
+      for (final mark in semesterMarks[semester]!) {
         final code =
             mark["subjectCode"]
                 ?.toString()
@@ -444,44 +424,108 @@ class _SemesterResultsPageState
           continue;
         }
 
-        final key = code;
-
         subjects
-            .putIfAbsent(
-          key,
-              () => [],
-        )
+            .putIfAbsent(code, () => [])
             .add(mark);
       }
+
+      // --------------------------------------------------
+      // ADD ADMIN SUBJECTS THAT HAVE NO MARKS
+      // --------------------------------------------------
+
+      for (final subjectDoc in expectedSubjects) {
+        final data =
+        subjectDoc.data()
+        as Map<String, dynamic>;
+
+        final code =
+            data["subjectCode"]
+                ?.toString()
+                .trim() ??
+                "";
+
+        if (code.isEmpty) {
+          continue;
+        }
+
+        if (!subjects.containsKey(code)) {
+          subjects[code] = [
+            {
+              "subjectCode": code,
+              "subjectName":
+              data["subjectName"]
+                  ?.toString() ??
+                  "",
+              "type":
+              data["type"]
+                  ?.toString() ??
+                  "Theory",
+              "credits":
+              (data["credits"] as num?)
+                  ?.toDouble() ??
+                  0,
+              "pendingSubject": true,
+              "semester": semester,
+            },
+          ];
+        }
+      }
+
+      // --------------------------------------------------
+      // BUILD RESULTS FOR EVERY ADMIN SUBJECT
+      // --------------------------------------------------
 
       final results =
       <Map<String, dynamic>>[];
 
-      for (final subject
-      in subjects.values) {
-        results.add(
-          buildSubjectResult(
-            subject,
-          ),
-        );
+      for (final subject in subjects.values) {
+        if (subject.length == 1 &&
+            subject.first["pendingSubject"] ==
+                true) {
+          results.add({
+            "subjectCode":
+            subject.first["subjectCode"] ?? "",
+            "subjectName":
+            subject.first["subjectName"] ?? "",
+            "type":
+            subject.first["type"] ?? "Theory",
+            "credits":
+            subject.first["credits"] ?? 0,
+            "average": null,
+            "external": null,
+            "total": null,
+            "grade": "-",
+            "gradePoint": 0,
+            "pass": false,
+            "pending": true,
+            "semester": semester,
+          });
+        } else {
+          results.add(
+            buildSubjectResult(subject),
+          );
+        }
       }
 
-      if (results.isEmpty) {
+      // --------------------------------------------------
+      // SEMESTER MUST HAVE ALL SUBJECTS PASSED
+      // --------------------------------------------------
+
+      final semesterCompleted =
+          results.isNotEmpty &&
+              results.every(
+                    (result) =>
+                result["pending"] != true &&
+                    result["pass"] == true,
+              );
+
+      if (!semesterCompleted) {
         continue;
       }
 
-      // A semester is completed only when
-      // every subject is fully marked and passed.
-      final semesterCompleted =
-      results.every(
-            (result) =>
-        result["pending"] != true &&
-            result["pass"] == true,
-      );
-
-      if (!semesterCompleted) {
-        return[];
-      }
+      // --------------------------------------------------
+      // CALCULATE SEMESTER GPA
+      // --------------------------------------------------
 
       double semesterCredits = 0;
       double semesterCreditPoints = 0;
@@ -511,29 +555,24 @@ class _SemesterResultsPageState
           semesterCreditPoints /
               semesterCredits;
 
-      completedCGPAs.add(
-        semesterCGPA,
-      );
+      completedCGPAs.add(semesterCGPA);
     }
 
     return completedCGPAs;
   }
+
   double calculateFGPA(
       List<double> completedCGPAs,
-      )
-  {
+      ) {
     if (completedCGPAs.isEmpty) {
       return 0;
     }
 
-    final sum =
-    completedCGPAs.reduce(
-          (a, b) => a + b,
-    );
+    final sum = completedCGPAs.reduce((a, b) => a + b);
 
-    return sum /
-        completedCGPAs.length;
+    return sum / completedCGPAs.length;
   }
+
   Future<double?> calculateCurrentCGPA(
       int currentSemester,
       ) async {
@@ -543,17 +582,10 @@ class _SemesterResultsPageState
       return null;
     }
 
-    final snapshot =
-    await FirebaseFirestore.instance
+    final snapshot = await FirebaseFirestore.instance
         .collection("student_marks")
-        .where(
-      "studentId",
-      isEqualTo: uid,
-    )
-        .where(
-      "released",
-      isEqualTo: true,
-    )
+        .where("studentId", isEqualTo: uid)
+        .where("released", isEqualTo: true)
         .get();
 
     final Map<int, List<Map<String, dynamic>>>
@@ -571,10 +603,7 @@ class _SemesterResultsPageState
       }
 
       semesterMarks
-          .putIfAbsent(
-        semester,
-            () => [],
-      )
+          .putIfAbsent(semester, () => [])
           .add(data);
     }
 
@@ -582,8 +611,30 @@ class _SemesterResultsPageState
     double totalCredits = 0;
 
     for (final entry in semesterMarks.entries) {
-      final Map<String, List<Map<String, dynamic>>>
-      subjects = {};
+      final semester = entry.key;
+
+      // --------------------------------------------------
+      // GET ALL SUBJECTS CONFIGURED BY ADMIN
+      // --------------------------------------------------
+
+      final subjectSnapshot =
+      await _loadExpectedSubjects(semester);
+
+      final expectedSubjects =
+          subjectSnapshot.docs;
+
+      if (expectedSubjects.isEmpty) {
+        continue;
+      }
+
+      // --------------------------------------------------
+      // GROUP RELEASED MARKS BY SUBJECT
+      // --------------------------------------------------
+
+      final Map<
+          String,
+          List<Map<String, dynamic>>
+      > subjects = {};
 
       for (final mark in entry.value) {
         final code =
@@ -596,50 +647,108 @@ class _SemesterResultsPageState
           continue;
         }
 
-        final category =
-            mark["examCategory"]
-                ?.toString()
-                .trim()
-                .toLowerCase() ??
-                "regular";
-
-        final key = code;
-
         subjects
-            .putIfAbsent(
-          key,
-              () => [],
-        )
+            .putIfAbsent(code, () => [])
             .add(mark);
       }
+
+      // --------------------------------------------------
+      // ADD ADMIN SUBJECTS WITH NO RELEASED MARKS
+      // --------------------------------------------------
+
+      for (final subjectDoc in expectedSubjects) {
+        final data =
+        subjectDoc.data()
+        as Map<String, dynamic>;
+
+        final code =
+            data["subjectCode"]
+                ?.toString()
+                .trim() ??
+                "";
+
+        if (code.isEmpty) {
+          continue;
+        }
+
+        if (!subjects.containsKey(code)) {
+          subjects[code] = [
+            {
+              "subjectCode": code,
+              "subjectName":
+              data["subjectName"]
+                  ?.toString() ??
+                  "",
+              "type":
+              data["type"]
+                  ?.toString() ??
+                  "Theory",
+              "credits":
+              (data["credits"] as num?)
+                  ?.toDouble() ??
+                  0,
+              "pendingSubject": true,
+              "semester": semester,
+            },
+          ];
+        }
+      }
+
+      // --------------------------------------------------
+      // BUILD RESULT FOR EVERY ADMIN SUBJECT
+      // --------------------------------------------------
 
       final results =
       <Map<String, dynamic>>[];
 
-      for (final subject
-      in subjects.values) {
-        results.add(
-          buildSubjectResult(subject),
-        );
+      for (final subject in subjects.values) {
+        if (subject.length == 1 &&
+            subject.first["pendingSubject"] ==
+                true) {
+          results.add({
+            "subjectCode":
+            subject.first["subjectCode"] ?? "",
+            "subjectName":
+            subject.first["subjectName"] ?? "",
+            "type":
+            subject.first["type"] ?? "Theory",
+            "credits":
+            subject.first["credits"] ?? 0,
+            "average": null,
+            "external": null,
+            "total": null,
+            "grade": "-",
+            "gradePoint": 0,
+            "pass": false,
+            "pending": true,
+            "semester": semester,
+          });
+        } else {
+          results.add(
+            buildSubjectResult(subject),
+          );
+        }
       }
 
-      if (results.isEmpty) {
-        continue;
-      }
+      // --------------------------------------------------
+      // ONLY COMPLETED SEMESTERS COUNT FOR CGPA
+      // --------------------------------------------------
 
-      // If ANY subject in this semester
-      // is failed or pending, this semester
-      // cannot contribute to CGPA.
       final semesterCompleted =
-      results.every(
-            (result) =>
-        result["pending"] != true &&
-            result["pass"] == true,
-      );
+          results.isNotEmpty &&
+              results.every(
+                    (result) =>
+                result["pending"] != true &&
+                    result["pass"] == true,
+              );
 
       if (!semesterCompleted) {
         continue;
       }
+
+      // --------------------------------------------------
+      // ADD COMPLETED SEMESTER CREDITS
+      // --------------------------------------------------
 
       for (final result in results) {
         final credits =
@@ -666,6 +775,7 @@ class _SemesterResultsPageState
     return totalCreditPoints /
         totalCredits;
   }
+
   Widget _buildCGPAFGPACard({
     required bool isDark,
     required bool semesterCompleted,
@@ -676,75 +786,44 @@ class _SemesterResultsPageState
     }
 
     return FutureBuilder<double?>(
-      future: calculateCurrentCGPA(
-        selectedSemester!,
-      ),
-
+      future: calculateCurrentCGPA(selectedSemester!),
       builder: (context, snapshot) {
         final cgpa = snapshot.data;
 
         return FutureBuilder<List<double>>(
           future: getCompletedSemesterGPAs(),
-
           builder: (context, fgpaSnapshot) {
-            final completedCGPAs =
-                fgpaSnapshot.data ?? [];
+            final completedCGPAs = fgpaSnapshot.data ?? [];
 
-            final fgpa =
-            completedCGPAs.isNotEmpty
-                ? calculateFGPA(
-              completedCGPAs,
-            )
+            final fgpa = completedCGPAs.isNotEmpty
+                ? calculateFGPA(completedCGPAs)
                 : null;
 
             return Card(
-              margin: const EdgeInsets.only(
-                bottom: 20,
-              ),
-
-              color: isDark
-                  ? const Color(0xFF1E293B)
-                  : Colors.white,
-
+              margin: const EdgeInsets.only(bottom: 20),
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
               child: Padding(
-                padding:
-                const EdgeInsets.all(20),
-
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
                     const Text(
                       "Academic Summary",
-
                       style: TextStyle(
                         fontSize: 20,
-                        fontWeight:
-                        FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-
                     const SizedBox(height: 18),
-
-                    _summaryValue(
-                      "SGPA",
-                      sgpa.toStringAsFixed(2),
-                    ),
-
+                    _summaryValue("SGPA", sgpa.toStringAsFixed(2)),
                     const SizedBox(height: 12),
-
                     _summaryValue(
                       "CGPA",
-                      cgpa == null
-                          ? "Not Available"
-                          : cgpa.toStringAsFixed(2),
+                      cgpa == null ? "Not Available" : cgpa.toStringAsFixed(2),
                     ),
-
                     const SizedBox(height: 12),
-
                     _summaryValue(
                       "FCGPA",
-                      fgpa == null
-                          ? "Not Available"
-                          : fgpa.toStringAsFixed(2),
+                      fgpa == null ? "Not Available" : fgpa.toStringAsFixed(2),
                     ),
                   ],
                 ),
@@ -755,13 +834,13 @@ class _SemesterResultsPageState
       },
     );
   }
+
   Widget _summaryValue(
       String title,
       String value,
       ) {
     return Row(
-      mainAxisAlignment:
-      MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           title,
@@ -781,128 +860,73 @@ class _SemesterResultsPageState
     );
   }
 
-
   // ============================================================
   // BUILD UI
   // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        Theme.of(context).brightness ==
-            Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final uid = studentId;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF081120)
-          : const Color(0xFFF4F8FC),
-
+      backgroundColor:
+      isDark ? const Color(0xFF081120) : const Color(0xFFF4F8FC),
       appBar: AppBar(
-        backgroundColor:
-        Colors.transparent,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text("Results"),
       ),
-
       body: uid == null
           ? const Center(
-        child: Text(
-          "Please login again.",
-        ),
+        child: Text("Please login again."),
       )
           : Padding(
-        padding:
-        const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             DropdownButtonFormField<int>(
               value: selectedSemester,
-
-              decoration:
-              const InputDecoration(
+              decoration: const InputDecoration(
                 labelText: "Semester",
-                border:
-                OutlineInputBorder(),
+                border: OutlineInputBorder(),
               ),
+              items: List.generate(8, (index) {
+                final semester = index + 1;
 
-              items: List.generate(
-                8,
-                    (index) {
-                  final semester =
-                      index + 1;
-
-                  return DropdownMenuItem(
-                    value: semester,
-                    child: Text(
-                      "Semester $semester",
-                    ),
-                  );
-                },
-              ),
-
+                return DropdownMenuItem(
+                  value: semester,
+                  child: Text("Semester $semester"),
+                );
+              }),
               onChanged: (value) {
                 setState(() {
-                  selectedSemester =
-                      value;
+                  selectedSemester = value;
                 });
               },
             ),
-
-            const SizedBox(
-              height: 20,
-            ),
-
-            if (selectedSemester ==
-                null)
+            const SizedBox(height: 20),
+            if (selectedSemester == null)
               const Expanded(
                 child: Center(
-                  child: Text(
-                    "Select Semester",
-                  ),
+                  child: Text("Select Semester"),
                 ),
               )
             else
               Expanded(
-                child:
-                StreamBuilder<
-                    QuerySnapshot>(
-                  stream:
-                  FirebaseFirestore
-                      .instance
-                      .collection(
-                    "student_marks",
-                  )
-                      .where(
-                    "studentId",
-                    isEqualTo:
-                    uid,
-                  )
-                      .where(
-                    "semester",
-                    isEqualTo:
-                    selectedSemester,
-                  )
-                      .where(
-                    "released",
-                    isEqualTo:
-                    true,
-                  )
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection("student_marks")
+                      .where("studentId", isEqualTo: uid)
+                      .where("semester", isEqualTo: selectedSemester)
+                      .where("released", isEqualTo: true)
                       .snapshots(),
-
-                  builder:
-                      (
-                      context,
-                      snapshot,
-                      ) {
-                    if (snapshot
-                        .connectionState ==
-                        ConnectionState
-                            .waiting) {
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return const Center(
-                        child:
-                        CircularProgressIndicator(),
+                        child: CircularProgressIndicator(),
                       );
                     }
 
@@ -910,452 +934,371 @@ class _SemesterResultsPageState
                       return Center(
                         child: Text(
                           "Unable to load results.\n${snapshot.error}",
-                          textAlign:
-                          TextAlign.center,
+                          textAlign: TextAlign.center,
                         ),
                       );
                     }
 
                     if (!snapshot.hasData) {
                       return const Center(
-                        child:
-                        CircularProgressIndicator(),
+                        child: CircularProgressIndicator(),
                       );
                     }
 
-                    final docs =
-                        snapshot.data!.docs;
+                    final docs = snapshot.data!.docs;
 
-                    if (docs.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          "No Results Released",
-                        ),
-                      );
-                    }
+                    return FutureBuilder<QuerySnapshot>(
+                      future: _loadExpectedSubjects(selectedSemester!),
+                      builder: (context, subjectSnapshot) {
+                        if (subjectSnapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
 
-                    // ==================================================
-                    // GROUP BY SUBJECT
-                    // ==================================================
-
-                    final Map<
-                        String,
-                        List<
-                            Map<
-                                String,
-                                dynamic>>>
-                    grouped = {};
-
-                    for (final doc
-                    in docs) {
-                      final data =
-                      doc.data()
-                      as Map<
-                          String,
-                          dynamic>;
-
-                      final code =
-                          data["subjectCode"]
-                              ?.toString()
-                              .trim() ??
-                              "";
-
-                      if (code.isEmpty) {
-                        continue;
-                      }
-
-                      final key = code;
-
-                      grouped.putIfAbsent(
-                        key,
-                            () => [],
-                      );
-
-                      grouped[key]!.add(data);
-                    }
-
-                    // ==================================================
-                    // SUBJECT RESULTS
-                    // ==================================================
-
-                    final List<
-                        Map<String, dynamic>>
-                    subjectResults = [];
-
-                    for (final entry
-                    in grouped.entries) {
-                      final result =
-                      buildSubjectResult(
-                        entry.value,
-                      );
-
-                      subjectResults
-                          .add(result);
-                    }
-
-                    // ==================================================
-                    // SGPA
-                    // ==================================================
-
-                    final completedSubjects =
-                    subjectResults.where(
-                          (result) =>
-                      result["pending"] != true,
-                    );
-                    final semesterPending =
-                    subjectResults.any(
-                          (result) =>
-                      result["pending"] == true,
-                    );
-
-                    final sgpa =
-                    calculateSGPA(
-                      completedSubjects.toList(),
-                    );
-
-                    double totalCredits = 0;
-
-                    bool semesterPassed = true;
-                    bool semesterCompleted =
-                        subjectResults.isNotEmpty;
-
-                    for (final result in subjectResults) {
-                      final credits =
-                          (result["credits"] as num?)
-                              ?.toDouble() ??
-                              0;
-
-                      totalCredits += credits;
-
-                      if (result["pending"] == true ||
-                          result["pass"] != true) {
-                        semesterPassed = false;
-                        semesterCompleted = false;
-                      }
-                    }
-
-
-                    // ==================================================
-                    // SEMESTER SUMMARY
-                    // ==================================================
-
-                    return ListView(
-                      padding:
-                      const EdgeInsets
-                          .only(
-                        bottom: 30,
-                      ),
-
-                      children: [
-                        Card(
-                          margin:
-                          const EdgeInsets
-                              .only(
-                            bottom: 20,
-                          ),
-
-                          color: isDark
-                              ? const Color(
-                            0xFF1E293B,
-                          )
-                              : Colors.white,
-
-                          child: Padding(
-                            padding:
-                            const EdgeInsets
-                                .all(
-                              20,
+                        if (subjectSnapshot.hasError) {
+                          return Center(
+                            child: Text(
+                              "Unable to load subjects.\n"
+                                  "${subjectSnapshot.error}",
+                              textAlign: TextAlign.center,
                             ),
+                          );
+                        }
 
-                            child: Column(
-                              children: [
-                                const Text(
-                                  "Semester GPA",
-                                  style:
-                                  TextStyle(
-                                    fontSize:
-                                    18,
-                                    fontWeight:
-                                    FontWeight
-                                        .bold,
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  height: 8,
-                                ),
-
-                                Text(
-                                  sgpa
-                                      .toStringAsFixed(
-                                    2,
-                                  ),
-                                  style:
-                                  const TextStyle(
-                                    fontSize:
-                                    34,
-                                    fontWeight:
-                                    FontWeight
-                                        .bold,
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  height: 8,
-                                ),
-
-                                Text(
-                                  "Total Credits: "
-                                      "${totalCredits.toStringAsFixed(1)}",
-                                ),
-
-                                const SizedBox(
-                                  height: 8,
-                                ),
-
-                                Text(
-                                  semesterPending
-                                      ? "Semester Result: PENDING"
-                                      : semesterPassed
-                                      ? "Semester Result: PASS"
-                                      : "Semester Result: FAIL",
-
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: semesterPending
-                                        ? Colors.orange
-                                        : semesterPassed
-                                        ? Colors.green
-                                        : Colors.red,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        _buildCGPAFGPACard(
-                          isDark: isDark,
-                          semesterCompleted: semesterCompleted,
-                          sgpa: sgpa,
-                        ),
+                        final subjectDocs =
+                            subjectSnapshot.data?.docs ?? [];
 
                         // ==================================================
-                        // SUBJECT CARDS
+                        // GROUP RELEASED MARKS BY SUBJECT
                         // ==================================================
 
-                        ...subjectResults.map(
-                              (result) {
-                                final pass =
-                                    result["pass"] == true;
+                        final Map<String, List<Map<String, dynamic>>>
+                        grouped = {};
 
-                                final pending =
-                                    result["pending"] == true;
+                        for (final doc in docs) {
+                          final data = doc.data() as Map<String, dynamic>;
 
-                            final grade =
-                            result["grade"];
+                          final code =
+                              data["subjectCode"]?.toString().trim() ??
+                                  "";
 
-                            final gradePoint =
-                            result[
-                            "gradePoint"];
+                          if (code.isEmpty) {
+                            continue;
+                          }
 
-                            final credits =
-                            result[
-                            "credits"];
+                          grouped.putIfAbsent(code, () => []);
 
-                            final average =
-                            result[
-                            "average"];
+                          grouped[code]!.add(data);
+                        }
 
-                            final external =
-                            result[
-                            "external"];
+                        // ==================================================
+                        // ADD ADMIN SUBJECTS WITH NO RELEASED MARKS
+                        // ==================================================
 
-                            final total =
-                            result["total"];
+                        for (final subjectDoc in subjectDocs) {
+                          final data =
+                          subjectDoc.data() as Map<String, dynamic>;
 
-                            final subjectName =
-                            result[
-                            "subjectName"];
+                          final code =
+                              data["subjectCode"]?.toString().trim() ??
+                                  "";
 
-                            final subjectCode =
-                            result[
-                            "subjectCode"];
+                          if (code.isEmpty) {
+                            continue;
+                          }
 
-                            final type =
-                            result["type"];
+                          if (!grouped.containsKey(code)) {
+                            grouped[code] = [
+                              {
+                                "subjectCode": code,
+                                "subjectName":
+                                data["subjectName"]?.toString() ??
+                                    "",
+                                "type":
+                                data["type"]?.toString() ?? "Theory",
+                                "credits":
+                                (data["credits"] as num?)
+                                    ?.toDouble() ??
+                                    0,
+                                "semester": selectedSemester,
+                                "pendingSubject": true,
+                              },
+                            ];
+                          }
+                        }
 
-                            return Card(
-                              margin:
-                              const EdgeInsets
-                                  .only(
-                                bottom: 15,
-                              ),
+                        // ==================================================
+                        // BUILD SUBJECT RESULTS
+                        // ==================================================
 
+                        final List<Map<String, dynamic>> subjectResults =
+                        [];
+
+                        for (final entry in grouped.entries) {
+                          final marks = entry.value;
+
+                          Map<String, dynamic> result;
+
+                          // Admin subject exists but no marks
+                          if (marks.length == 1 &&
+                              marks.first["pendingSubject"] == true) {
+                            result = {
+                              "subjectCode":
+                              marks.first["subjectCode"] ?? "",
+                              "subjectName":
+                              marks.first["subjectName"] ?? "",
+                              "type": marks.first["type"] ?? "Theory",
+                              "credits": marks.first["credits"] ?? 0,
+                              "average": null,
+                              "external": null,
+                              "total": null,
+                              "grade": "-",
+                              "gradePoint": 0,
+                              "pass": false,
+                              "pending": true,
+                              "semester": selectedSemester,
+                            };
+                          } else {
+                            result = buildSubjectResult(marks);
+                          }
+
+                          subjectResults.add(result);
+                        }
+
+                        // ==================================================
+                        // SEMESTER STATUS
+                        // ==================================================
+
+                        final semesterPending = subjectResults.any(
+                              (result) => result["pending"] == true,
+                        );
+
+                        final semesterCompleted =
+                            subjectResults.isNotEmpty &&
+                                !semesterPending &&
+                                subjectResults.every(
+                                      (result) => result["pass"] == true,
+                                );
+
+                        final semesterPassed = semesterCompleted;
+
+                        // ==================================================
+                        // SGPA
+                        // ==================================================
+
+                        final sgpa = semesterCompleted
+                            ? calculateSGPA(subjectResults)
+                            : 0.0;
+
+                        // ==================================================
+                        // TOTAL CREDITS
+                        // ==================================================
+
+                        double totalCredits = 0;
+
+                        for (final result in subjectResults) {
+                          totalCredits +=
+                              (result["credits"] as num?)?.toDouble() ??
+                                  0;
+                        }
+
+                        // ==================================================
+                        // SEMESTER SUMMARY
+                        // ==================================================
+
+                        return ListView(
+                          padding: const EdgeInsets.only(bottom: 30),
+                          children: [
+                            Card(
+                              margin: const EdgeInsets.only(bottom: 20),
                               color: isDark
-                                  ? const Color(
-                                0xFF1E293B,
-                              )
+                                  ? const Color(0xFF1E293B)
                                   : Colors.white,
-
-                              child:
-                              Padding(
-                                padding:
-                                const EdgeInsets
-                                    .all(
-                                  16,
-                                ),
-
-                                child:
-                                Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment
-                                      .start,
-
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
                                   children: [
-                                    Text(
-                                      subjectName
-                                          .toString(),
-                                      style:
-                                      const TextStyle(
-                                        fontSize:
-                                        18,
-                                        fontWeight:
-                                        FontWeight
-                                            .bold,
+                                    const Text(
+                                      "Semester GPA",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-
-                                    const SizedBox(
-                                      height: 6,
-                                    ),
-
+                                    const SizedBox(height: 8),
                                     Text(
-                                      "Subject Code: "
-                                          "$subjectCode",
-                                    ),
-
-                                    const SizedBox(
-                                      height: 12,
-                                    ),
-
-                                    Text(
-                                      type
-                                          .toString()
-                                          .toLowerCase() ==
-                                          "lab"
-                                          ? "Average Internal: "
-                                          "${average == null ? '--' : (average as num).toStringAsFixed(1)}"
-                                          : "Average Mid: "
-                                          "${average == null ? '--' : (average as num).toStringAsFixed(1)}",
-                                    ),
-
-                                    const SizedBox(
-                                      height: 4,
-                                    ),
-
-                                    Text(
-                                      type
-                                          .toString()
-                                          .toLowerCase() ==
-                                          "lab"
-                                          ? "Lab External: ${external ?? '--'}"
-                                          : "Semester External: ${external ?? '--'}",
-                                    ),
-
-                                    const SizedBox(
-                                      height: 4,
-                                    ),
-
-                                    Text(
-                                      "Total: "
-                                          "${total == null ? '--' : (total as num).toStringAsFixed(1)}",
-                                    ),
-
-                                    const SizedBox(
-                                      height: 8,
-                                    ),
-
-                                    Text(
-                                      "Grade: $grade",
-                                      style:
-                                      const TextStyle(
-                                        fontWeight:
-                                        FontWeight
-                                            .bold,
+                                      semesterCompleted
+                                          ? sgpa.toStringAsFixed(2)
+                                          : "Not Available",
+                                      style: const TextStyle(
+                                        fontSize: 34,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-
-                                    const SizedBox(
-                                      height: 4,
-                                    ),
-
+                                    const SizedBox(height: 8),
                                     Text(
-                                      "Grade Point: "
-                                          "$gradePoint",
+                                      "Total Credits: "
+                                          "${totalCredits.toStringAsFixed(1)}",
                                     ),
-
-                                    const SizedBox(
-                                      height: 4,
-                                    ),
-
+                                    const SizedBox(height: 8),
                                     Text(
-                                      "Credits: "
-                                          "$credits",
-                                    ),
-
-                                    const SizedBox(
-                                      height: 12,
-                                    ),
-
-                                    Container(
-                                      padding:
-                                      const EdgeInsets
-                                          .symmetric(
-                                        horizontal:
-                                        12,
-                                        vertical:
-                                        6,
-                                      ),
-
-                                      decoration:
-                                      BoxDecoration(
-                                        color: pending
+                                      semesterPending
+                                          ? "Semester Result: PENDING"
+                                          : semesterPassed
+                                          ? "Semester Result: PASS"
+                                          : "Semester Result: FAIL",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: semesterPending
                                             ? Colors.orange
-                                            : pass
+                                            : semesterPassed
                                             ? Colors.green
                                             : Colors.red,
-
-                                        borderRadius:
-                                        BorderRadius
-                                            .circular(
-                                          20,
-                                        ),
-                                      ),
-
-                                      child:
-                                      Text(
-                                        pending
-                                            ? "PENDING"
-                                            : pass
-                                            ? "PASS"
-                                            : "FAIL",
-                                        style:
-                                        const TextStyle(
-                                          color:
-                                          Colors.white,
-                                          fontWeight:
-                                          FontWeight
-                                              .bold,
-                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                      ],
+                            ),
+
+                            // ==================================================
+                            // CGPA / FCGPA
+                            // ==================================================
+
+                            _buildCGPAFGPACard(
+                              isDark: isDark,
+                              semesterCompleted: semesterCompleted,
+                              sgpa: sgpa,
+                            ),
+
+                            // ==================================================
+                            // SUBJECT CARDS
+                            // ==================================================
+
+                            ...subjectResults.map((result) {
+                              final pass = result["pass"] == true;
+
+                              final pending = result["pending"] == true;
+
+                              final grade = result["grade"];
+
+                              final gradePoint = result["gradePoint"];
+
+                              final credits = result["credits"];
+
+                              final average = result["average"];
+
+                              final external = result["external"];
+
+                              final total = result["total"];
+
+                              final subjectName = result["subjectName"];
+
+                              final subjectCode = result["subjectCode"];
+
+                              final type = result["type"];
+
+                              return Card(
+                                margin:
+                                const EdgeInsets.only(bottom: 15),
+                                color: isDark
+                                    ? const Color(0xFF1E293B)
+                                    : Colors.white,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        subjectName.toString(),
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        "Subject Code: "
+                                            "$subjectCode",
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        type.toString().toLowerCase() ==
+                                            "lab"
+                                            ? "Average Internal: "
+                                            "${average == null ? '--' : (average as num).toStringAsFixed(1)}"
+                                            : "Average Mid: "
+                                            "${average == null ? '--' : (average as num).toStringAsFixed(1)}",
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        type.toString().toLowerCase() ==
+                                            "lab"
+                                            ? "Lab External: "
+                                            "${external ?? '--'}"
+                                            : "Semester External: "
+                                            "${external ?? '--'}",
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "Total: "
+                                            "${total == null ? '--' : (total as num).toStringAsFixed(1)}",
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        "Grade: $grade",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "Grade Point: "
+                                            "$gradePoint",
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "Credits: $credits",
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        padding:
+                                        const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: pending
+                                              ? Colors.orange
+                                              : pass
+                                              ? Colors.green
+                                              : Colors.red,
+                                          borderRadius:
+                                          BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          pending
+                                              ? "PENDING"
+                                              : pass
+                                              ? "PASS"
+                                              : "FAIL",
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        );
+                      },
                     );
                   },
                 ),
