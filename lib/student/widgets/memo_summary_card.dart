@@ -428,6 +428,9 @@ class MemoSummaryCard extends StatelessWidget {
   Future<QuerySnapshot> _getExpectedSubjects(
       Map<String, dynamic> studentData,
       ) {
+    final semesters =
+    List<int>.generate(semester, (index) => index + 1);
+
     return FirebaseFirestore.instance
         .collection("subjects")
         .where(
@@ -435,14 +438,21 @@ class MemoSummaryCard extends StatelessWidget {
       isEqualTo: studentData["department"],
     )
         .where(
-      "year",
-      isEqualTo: studentData["year"],
-    )
-        .where(
       "semester",
-      isEqualTo: semester,
+      whereIn: semesters,
     )
         .get();
+  }
+  String _yearForSemester(int semester) {
+    if (semester <= 2) {
+      return "1st";
+    } else if (semester <= 4) {
+      return "2nd";
+    } else if (semester <= 6) {
+      return "3rd";
+    } else {
+      return "4th";
+    }
   }
 
   Widget _buildSummary(
@@ -507,16 +517,32 @@ class MemoSummaryCard extends StatelessWidget {
       final subjectCode =
           data["subjectCode"]?.toString().trim() ?? "";
 
-      if (subjectCode.isEmpty) {
+      final subjectSemester =
+      (data["semester"] as num?)?.toInt();
+
+      final subjectYear =
+      data["year"]?.toString().trim();
+
+      if (subjectCode.isEmpty ||
+          subjectSemester == null) {
+        continue;
+      }
+
+      // Only use the subject if its year matches
+      // the academic year of that semester.
+      if (subjectYear !=
+          _yearForSemester(subjectSemester)) {
         continue;
       }
 
       final alreadyExists = subjects.any(
             (subject) =>
-        subject["subjectCode"]?.toString().trim() ==
+        subject["subjectCode"]
+            ?.toString()
+            .trim() ==
             subjectCode &&
             (subject["semester"] as num?)?.toInt() ==
-                semester,
+                subjectSemester,
       );
 
       if (!alreadyExists) {
@@ -524,7 +550,7 @@ class MemoSummaryCard extends StatelessWidget {
           "subjectCode": subjectCode,
           "subjectName":
           data["subjectName"]?.toString() ?? "",
-          "semester": semester,
+          "semester": subjectSemester,
           "credits":
           (data["credits"] as num?)?.toDouble() ?? 0,
           "pass": false,
@@ -573,11 +599,13 @@ class MemoSummaryCard extends StatelessWidget {
     final Map<int, Map<String, dynamic>>
     semesterResults = {};
 
-    for (final entry
-    in semesterSubjects.entries) {
-      semesterResults[entry.key] =
+    for (int sem = 1; sem <= semester; sem++) {
+      final subjectsForSemester =
+          semesterSubjects[sem] ?? [];
+
+      semesterResults[sem] =
           calculateSemesterResult(
-            entry.value,
+            subjectsForSemester,
           );
     }
 
@@ -600,17 +628,9 @@ class MemoSummaryCard extends StatelessWidget {
 
     double sgpa = 0;
 
-    if (semesterResults.isNotEmpty) {
-      final semesters =
-      semesterResults.keys.toList()
-        ..sort();
-
-      final latestSemester =
-          semesters.last;
-
+    if (semesterResults.containsKey(semester)) {
       sgpa =
-          (semesterResults[
-          latestSemester]?["sgpa"]
+          (semesterResults[semester]?["sgpa"]
           as num?)
               ?.toDouble() ??
               0;
@@ -804,7 +824,9 @@ class MemoSummaryCard extends StatelessWidget {
 
                   summaryRow(
                     "SGPA",
-                    sgpa.toStringAsFixed(2),
+                    semesterResults[semester]?["cgpaAvailable"] == true
+                        ? sgpa.toStringAsFixed(2)
+                        : "Not Available",
                   ),
 
                   summaryRow(
