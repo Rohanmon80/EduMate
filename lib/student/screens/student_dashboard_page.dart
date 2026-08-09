@@ -8,6 +8,7 @@ import '../../main.dart';
 import 'attendance_page.dart';
 import 'notices_page.dart';
 import 'results_page.dart';
+import 'marks_details_page.dart';
 
 class StudentDashboardPage extends StatelessWidget {
   const StudentDashboardPage({super.key});
@@ -656,7 +657,7 @@ class StudentDashboardPage extends StatelessWidget {
                         icon: Icons.school,
                         color: Colors.blue,
                         isDark: isDark,
-                        page: const ResultsPage(),
+                        page: const MarksDetailsPage(),
                       ),
                       quickCard(
                         context: context,

@@ -2,19 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class ResultsPage extends StatefulWidget {
-  const ResultsPage({super.key});
+class SemesterResultsPage extends StatefulWidget {
+  const SemesterResultsPage({super.key});
 
   @override
-  State<ResultsPage> createState() => _ResultsPageState();
+  State<SemesterResultsPage> createState() =>
+      _SemesterResultsPageState();
 }
 
-class _ResultsPageState extends State<ResultsPage> {
+class _SemesterResultsPageState
+    extends State<SemesterResultsPage> {
   int? selectedSemester;
-
-  // ============================================================
-  // GET CURRENT STUDENT ID
-  // ============================================================
 
   String? get studentId {
     return FirebaseAuth.instance.currentUser?.uid;
@@ -25,11 +23,16 @@ class _ResultsPageState extends State<ResultsPage> {
   // ============================================================
 
   Map<String, dynamic> calculateGrade({
-    required double total,
     required double average,
+    required double total,
   }) {
-    // Same pass rule used by your previous ResultsPage.
-    final pass = average >= 14 && total >= 40;
+    // Student FAILS if:
+    // 1. Average Mid/Internal < 14
+    // OR
+    // 2. Average + External < 40
+
+    final bool pass =
+        average >= 14 && total >= 40;
 
     String grade = "F";
     int gradePoint = 0;
@@ -110,6 +113,7 @@ class _ResultsPageState extends State<ResultsPage> {
       }
     }
 
+    // Same calculation for theory and lab.
     final average =
         (internal1 + internal2) / 2;
 
@@ -118,13 +122,11 @@ class _ResultsPageState extends State<ResultsPage> {
 
     final gradeData =
     calculateGrade(
-      total: total,
       average: average,
+      total: total,
     );
 
-    // IMPORTANT:
-    // Credits come from student_marks.
-    // They were originally taken from Firebase subjects.
+    // Credits are stored in student_marks.
     double credits = 0;
 
     for (final item in marks) {
@@ -170,7 +172,46 @@ class _ResultsPageState extends State<ResultsPage> {
       "semester":
       (first["semester"] as num?)
           ?.toInt(),
+
+      "examCategory":
+      first["examCategory"]?.toString() ??
+          "Regular",
     };
+  }
+
+  // ============================================================
+  // BUILD SGPA
+  // ============================================================
+
+  double calculateSGPA(
+      List<Map<String, dynamic>> subjects,
+      ) {
+    double totalCredits = 0;
+    double totalCreditPoints = 0;
+
+    for (final subject in subjects) {
+      final credits =
+          (subject["credits"] as num?)
+              ?.toDouble() ??
+              0;
+
+      final gradePoint =
+          (subject["gradePoint"] as num?)
+              ?.toDouble() ??
+              0;
+
+      totalCredits += credits;
+
+      totalCreditPoints +=
+          credits * gradePoint;
+    }
+
+    if (totalCredits == 0) {
+      return 0;
+    }
+
+    return totalCreditPoints /
+        totalCredits;
   }
 
   // ============================================================
@@ -191,7 +232,8 @@ class _ResultsPageState extends State<ResultsPage> {
           : const Color(0xFFF4F8FC),
 
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor:
+        Colors.transparent,
         elevation: 0,
         title: const Text("Results"),
       ),
@@ -203,13 +245,10 @@ class _ResultsPageState extends State<ResultsPage> {
         ),
       )
           : Padding(
-        padding: const EdgeInsets.all(16),
+        padding:
+        const EdgeInsets.all(16),
         child: Column(
           children: [
-            // ==================================================
-            // SEMESTER DROPDOWN
-            // ==================================================
-
             DropdownButtonFormField<int>(
               value: selectedSemester,
 
@@ -243,7 +282,9 @@ class _ResultsPageState extends State<ResultsPage> {
               },
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(
+              height: 20,
+            ),
 
             if (selectedSemester ==
                 null)
@@ -307,8 +348,7 @@ class _ResultsPageState extends State<ResultsPage> {
                       );
                     }
 
-                    if (!snapshot
-                        .hasData) {
+                    if (!snapshot.hasData) {
                       return const Center(
                         child:
                         CircularProgressIndicator(),
@@ -316,9 +356,7 @@ class _ResultsPageState extends State<ResultsPage> {
                     }
 
                     final docs =
-                        snapshot
-                            .data!
-                            .docs;
+                        snapshot.data!.docs;
 
                     if (docs.isEmpty) {
                       return const Center(
@@ -337,8 +375,8 @@ class _ResultsPageState extends State<ResultsPage> {
                         List<
                             Map<
                                 String,
-                                dynamic>>> grouped =
-                    {};
+                                dynamic>>>
+                    grouped = {};
 
                     for (final doc
                     in docs) {
@@ -367,11 +405,12 @@ class _ResultsPageState extends State<ResultsPage> {
                     }
 
                     // ==================================================
-                    // CALCULATE SUBJECT RESULTS
+                    // SUBJECT RESULTS
                     // ==================================================
 
-                    final subjectResults =
-                    <Map<String, dynamic>>[];
+                    final List<
+                        Map<String, dynamic>>
+                    subjectResults = [];
 
                     for (final entry
                     in grouped.entries) {
@@ -388,11 +427,15 @@ class _ResultsPageState extends State<ResultsPage> {
                     // SGPA
                     // ==================================================
 
-                    double totalCredits =
-                    0;
+                    final sgpa =
+                    calculateSGPA(
+                      subjectResults,
+                    );
 
-                    double totalCreditPoints =
-                    0;
+                    double totalCredits = 0;
+
+                    bool semesterPassed =
+                    true;
 
                     for (final result
                     in subjectResults) {
@@ -402,33 +445,18 @@ class _ResultsPageState extends State<ResultsPage> {
                               ?.toDouble() ??
                               0;
 
-                      final gradePoint =
-                          (result[
-                          "gradePoint"]
-                          as num?)
-                              ?.toDouble() ??
-                              0;
-
-                      // Subject credits remain
-                      // fixed regardless of marks.
                       totalCredits +=
                           credits;
 
-                      // Failed subject gets
-                      // grade point 0.
-                      totalCreditPoints +=
-                          credits *
-                              gradePoint;
+                      if (result["pass"] !=
+                          true) {
+                        semesterPassed =
+                        false;
+                      }
                     }
 
-                    final sgpa =
-                    totalCredits == 0
-                        ? 0
-                        : totalCreditPoints /
-                        totalCredits;
-
                     // ==================================================
-                    // UI
+                    // SEMESTER SUMMARY
                     // ==================================================
 
                     return ListView(
@@ -439,10 +467,6 @@ class _ResultsPageState extends State<ResultsPage> {
                       ),
 
                       children: [
-                        // ----------------------------------------------
-                        // SEMESTER SUMMARY
-                        // ----------------------------------------------
-
                         Card(
                           margin:
                           const EdgeInsets
@@ -482,10 +506,10 @@ class _ResultsPageState extends State<ResultsPage> {
                                 ),
 
                                 Text(
-                                  sgpa.toStringAsFixed(
+                                  sgpa
+                                      .toStringAsFixed(
                                     2,
                                   ),
-
                                   style:
                                   const TextStyle(
                                     fontSize:
@@ -504,25 +528,46 @@ class _ResultsPageState extends State<ResultsPage> {
                                   "Total Credits: "
                                       "${totalCredits.toStringAsFixed(1)}",
                                 ),
+
+                                const SizedBox(
+                                  height: 8,
+                                ),
+
+                                Text(
+                                  semesterPassed
+                                      ? "Semester Result: PASS"
+                                      : "Semester Result: FAIL",
+
+                                  style:
+                                  TextStyle(
+                                    fontWeight:
+                                    FontWeight
+                                        .bold,
+                                    color:
+                                    semesterPassed
+                                        ? Colors
+                                        .green
+                                        : Colors
+                                        .red,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ),
 
-                        // ----------------------------------------------
+                        // ==================================================
                         // SUBJECT CARDS
-                        // ----------------------------------------------
+                        // ==================================================
 
                         ...subjectResults.map(
                               (result) {
                             final pass =
-                                result[
-                                "pass"] ==
+                                result["pass"] ==
                                     true;
 
                             final grade =
-                            result[
-                            "grade"];
+                            result["grade"];
 
                             final gradePoint =
                             result[
@@ -541,8 +586,7 @@ class _ResultsPageState extends State<ResultsPage> {
                             "external"];
 
                             final total =
-                            result[
-                            "total"];
+                            result["total"];
 
                             final subjectName =
                             result[
@@ -553,8 +597,7 @@ class _ResultsPageState extends State<ResultsPage> {
                             "subjectCode"];
 
                             final type =
-                            result[
-                            "type"];
+                            result["type"];
 
                             return Card(
                               margin:
@@ -587,7 +630,6 @@ class _ResultsPageState extends State<ResultsPage> {
                                     Text(
                                       subjectName
                                           .toString(),
-
                                       style:
                                       const TextStyle(
                                         fontSize:
@@ -710,7 +752,6 @@ class _ResultsPageState extends State<ResultsPage> {
                                         pass
                                             ? "PASS"
                                             : "FAIL",
-
                                         style:
                                         const TextStyle(
                                           color:
