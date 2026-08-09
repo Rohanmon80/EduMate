@@ -75,44 +75,13 @@ class _MemoSubjectTableState
         final docs = snapshot.data!.docs;
 
         // ======================================================
-        // FILTER SELECTED REGULAR / SUPPLY
-        // ======================================================
+// GROUP REGULAR + SUPPLY BY SUBJECT
+// ======================================================
 
-        final filteredDocs = docs.where((doc) {
-          final data =
-          doc.data() as Map<String, dynamic>;
-
-          final category =
-              data["examCategory"]
-                  ?.toString()
-                  .trim()
-                  .toLowerCase() ??
-                  "regular";
-
-          return category ==
-              widget.examType
-                  .trim()
-                  .toLowerCase();
-        }).toList();
-
-        if (filteredDocs.isEmpty) {
-          return const Center(
-            child: Text(
-              "No marks available for the selected exam.",
-            ),
-          );
-        }
-
-        // ======================================================
-        // GROUP BY SUBJECT
-        // ======================================================
-
-        final Map<
-            String,
-            List<Map<String, dynamic>>>
+        final Map<String, List<Map<String, dynamic>>>
         subjectGroups = {};
 
-        for (final doc in filteredDocs) {
+        for (final doc in docs) {
           final data =
           doc.data() as Map<String, dynamic>;
 
@@ -126,20 +95,21 @@ class _MemoSubjectTableState
             continue;
           }
 
-          subjectGroups
-              .putIfAbsent(
+          subjectGroups.putIfAbsent(
             subjectCode,
                 () => [],
-          )
-              .add(data);
+          );
+
+          subjectGroups[subjectCode]!.add(data);
         }
+
 
         final rows = <TableRow>[];
 
         for (final entry
         in subjectGroups.entries) {
           final result =
-          calculateSubjectResult(
+          resolveSubjectResult(
             entry.value,
           );
 
@@ -199,6 +169,87 @@ class _MemoSubjectTableState
         );
       },
     );
+  }
+  Map<String, dynamic> resolveSubjectResult(
+      List<Map<String, dynamic>> marks,
+      ) {
+    final regularMarks =
+    <Map<String, dynamic>>[];
+
+    final supplyMarks =
+    <Map<String, dynamic>>[];
+
+    for (final mark in marks) {
+      final category =
+          mark["examCategory"]
+              ?.toString()
+              .trim()
+              .toLowerCase() ??
+              "regular";
+
+      if (category == "supply") {
+        supplyMarks.add(mark);
+      } else {
+        regularMarks.add(mark);
+      }
+    }
+
+    // If regular result already passes,
+    // keep the regular result.
+    final regularResult =
+    regularMarks.isNotEmpty
+        ? calculateSubjectResult(
+      regularMarks,
+    )
+        : null;
+
+    if (regularResult != null &&
+        regularResult["result"] == "PASS") {
+      return regularResult;
+    }
+
+    // Supply replaces ONLY the exams that
+    // were actually repeated.
+    if (supplyMarks.isNotEmpty) {
+      final mergedMarks =
+      <Map<String, dynamic>>[];
+
+      final suppliedExams = supplyMarks
+          .map(
+            (e) => e["exam"]
+            ?.toString()
+            .trim(),
+      )
+          .whereType<String>()
+          .toSet();
+
+      // Keep regular marks for exams
+      // that were NOT supplied.
+      for (final mark in regularMarks) {
+        final exam =
+        mark["exam"]
+            ?.toString()
+            .trim();
+
+        if (exam == null ||
+            !suppliedExams.contains(exam)) {
+          mergedMarks.add(mark);
+        }
+      }
+
+      // Supply replaces the same exam.
+      mergedMarks.addAll(supplyMarks);
+
+      final supplyResult =
+      calculateSubjectResult(
+        mergedMarks,
+      );
+
+      return supplyResult;
+    }
+
+    return regularResult ??
+        calculateSubjectResult(marks);
   }
 
   // ============================================================
@@ -334,8 +385,8 @@ class _MemoSubjectTableState
 
       final passed =
           average >= 14 &&
+              labExternal >= 21 &&
               total >= 40;
-
       return {
         "subjectName": subjectName,
         "credits": credits,
@@ -380,6 +431,7 @@ class _MemoSubjectTableState
 
     final passed =
         average >= 14 &&
+            external >= 21 &&
             total >= 40;
 
     return {

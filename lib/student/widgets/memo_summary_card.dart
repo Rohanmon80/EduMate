@@ -3,7 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class MemoSummaryCard extends StatelessWidget {
-  const MemoSummaryCard({super.key});
+  final int semester;
+  final String examType;
+
+  const MemoSummaryCard({
+    super.key,
+    required this.semester,
+    required this.examType,
+  });
 
   // ============================================================
   // GRADE CALCULATION
@@ -414,12 +421,33 @@ class MemoSummaryCard extends StatelessWidget {
     };
   }
 
+
   // ============================================================
   // BUILD SUMMARY
   // ============================================================
+  Future<QuerySnapshot> _getExpectedSubjects(
+      Map<String, dynamic> studentData,
+      ) {
+    return FirebaseFirestore.instance
+        .collection("subjects")
+        .where(
+      "department",
+      isEqualTo: studentData["department"],
+    )
+        .where(
+      "year",
+      isEqualTo: studentData["year"],
+    )
+        .where(
+      "semester",
+      isEqualTo: semester,
+    )
+        .get();
+  }
 
   Widget _buildSummary(
       List<QueryDocumentSnapshot> docs,
+      List<QueryDocumentSnapshot> expectedSubjectDocs,
       ) {
     // ----------------------------------------------------------
     // GROUP MARKS BY SUBJECT
@@ -469,6 +497,47 @@ class MemoSummaryCard extends StatelessWidget {
           ),
 
       );
+    }
+    // Add subjects that exist in Admin's subject list
+// but don't have released marks yet.
+    for (final subjectDoc in expectedSubjectDocs) {
+      final data =
+      subjectDoc.data() as Map<String, dynamic>;
+
+      final subjectCode =
+          data["subjectCode"]?.toString().trim() ?? "";
+
+      if (subjectCode.isEmpty) {
+        continue;
+      }
+
+      final alreadyExists = subjects.any(
+            (subject) =>
+        subject["subjectCode"]?.toString().trim() ==
+            subjectCode &&
+            (subject["semester"] as num?)?.toInt() ==
+                semester,
+      );
+
+      if (!alreadyExists) {
+        subjects.add({
+          "subjectCode": subjectCode,
+          "subjectName":
+          data["subjectName"]?.toString() ?? "",
+          "semester": semester,
+          "credits":
+          (data["credits"] as num?)?.toDouble() ?? 0,
+          "pass": false,
+          "complete": false,
+          "grade": "Pending",
+          "gradePoint": 0,
+          "average": null,
+          "external": null,
+          "total": null,
+          "type":
+          data["type"]?.toString() ?? "Theory",
+        });
+      }
     }
 
     // ----------------------------------------------------------
@@ -748,7 +817,7 @@ class MemoSummaryCard extends StatelessWidget {
                   ),
 
                   summaryRow(
-                    "FGPA",
+                    "FCGPA",
                     fgpa == null
                         ? "Not Available"
                         : fgpa.toStringAsFixed(
@@ -804,14 +873,9 @@ class MemoSummaryCard extends StatelessWidget {
   // ============================================================
 
   @override
-  Widget build(
-      BuildContext context,
-      ) {
+  Widget build(BuildContext context) {
     final uid =
-        FirebaseAuth
-            .instance
-            .currentUser
-            ?.uid;
+        FirebaseAuth.instance.currentUser?.uid;
 
     if (uid == null) {
       return const Text(
@@ -819,56 +883,85 @@ class MemoSummaryCard extends StatelessWidget {
       );
     }
 
-    return FutureBuilder<
-        QuerySnapshot>(
-      future:
-      FirebaseFirestore
-          .instance
-          .collection(
-        "student_marks",
-      )
-          .where(
-        "studentId",
-        isEqualTo: uid,
-      )
-          .where(
-        "released",
-        isEqualTo: true,
-      )
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection("users")
+          .doc(uid)
           .get(),
-
-      builder:
-          (
-          context,
-          marksSnapshot,
-          ) {
-        if (marksSnapshot
-            .connectionState ==
+      builder: (context, userSnapshot) {
+        if (userSnapshot.connectionState ==
             ConnectionState.waiting) {
           return const Center(
-            child:
-            CircularProgressIndicator(),
+            child: CircularProgressIndicator(),
           );
         }
 
-        if (marksSnapshot.hasError) {
-          return Text(
-            "Unable to load result data.\n"
-                "${marksSnapshot.error}",
-          );
-        }
-
-        if (!marksSnapshot.hasData) {
+        if (userSnapshot.hasError ||
+            !userSnapshot.hasData ||
+            !userSnapshot.data!.exists) {
           return const Text(
-            "No result data available",
+            "Unable to load student data",
           );
         }
 
-        final docs =
-            marksSnapshot.data!.docs;
+        final userData =
+        userSnapshot.data!.data()
+        as Map<String, dynamic>;
 
-        return _buildSummary(
-          docs,
+        return FutureBuilder<QuerySnapshot>(
+          future: FirebaseFirestore.instance
+              .collection("student_marks")
+              .where(
+            "studentId",
+            isEqualTo: uid,
+          )
+              .where(
+            "released",
+            isEqualTo: true,
+          )
+              .get(),
+          builder: (context, marksSnapshot) {
+            if (marksSnapshot.connectionState ==
+                ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            if (marksSnapshot.hasError ||
+                !marksSnapshot.hasData) {
+              return const Text(
+                "Unable to load result data",
+              );
+            }
+
+            return FutureBuilder<QuerySnapshot>(
+              future: _getExpectedSubjects(userData),
+              builder: (
+                  context,
+                  subjectSnapshot,
+                  ) {
+                if (subjectSnapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                if (subjectSnapshot.hasError ||
+                    !subjectSnapshot.hasData) {
+                  return const Text(
+                    "Unable to load subject data",
+                  );
+                }
+
+                return _buildSummary(
+                  marksSnapshot.data!.docs,
+                  subjectSnapshot.data!.docs,
+                );
+              },
+            );
+          },
         );
       },
     );

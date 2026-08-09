@@ -411,7 +411,10 @@ class _MemoPageState extends State<MemoPage> {
                   // SUMMARY
                   // ------------------------------------------------
 
-                  const MemoSummaryCard(),
+                  MemoSummaryCard(
+                    semester: _selectedSemesterNumber(),
+                    examType: selectedExamType!,
+                  ),
                 ],
               ),
             ),

@@ -741,7 +741,7 @@ class _SemesterResultsPageState
                     const SizedBox(height: 12),
 
                     _summaryValue(
-                      "FGPA",
+                      "FCGPA",
                       fgpa == null
                           ? "Not Available"
                           : fgpa.toStringAsFixed(2),
