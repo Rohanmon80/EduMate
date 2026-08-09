@@ -89,18 +89,41 @@ class _ResultReleasePageState
 
 
           for (final entry in grouped.entries) {
-
             final list = entry.value;
 
             final first =
             list.first.data() as Map<String, dynamic>;
+
+            if (selectedDepartment != "All" &&
+                first["department"] != selectedDepartment) {
+              continue;
+            }
+
+            if (selectedYear != "All" &&
+                first["year"] != selectedYear) {
+              continue;
+            }
+
+            if (selectedSection != "All" &&
+                first["section"] != selectedSection) {
+              continue;
+            }
+
+            if (selectedSemester != 0 &&
+                first["semester"] != selectedSemester) {
+              continue;
+            }
+
+            if (selectedExam != "All" &&
+                first["exam"] != selectedExam) {
+              continue;
+            }
 
             if (first["released"] == true) {
               releasedSubjects++;
             } else {
               pendingSubjects++;
             }
-
           }
 
           return SingleChildScrollView(
@@ -165,6 +188,43 @@ class _ResultReleasePageState
                           onChanged: (value) {
                             setState(() {
                               selectedYear = value!;
+                            });
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 150,
+                        child: DropdownButtonFormField<String>(
+                          value: selectedSection,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: isDark
+                                ? const Color(0xFF1E293B)
+                                : Colors.white,
+                            labelText: "Section",
+                            border: const OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: "All",
+                              child: Text("All"),
+                            ),
+                            DropdownMenuItem(
+                              value: "A",
+                              child: Text("A"),
+                            ),
+                            DropdownMenuItem(
+                              value: "B",
+                              child: Text("B"),
+                            ),
+                            DropdownMenuItem(
+                              value: "C",
+                              child: Text("C"),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedSection = value!;
                             });
                           },
                         ),
@@ -288,7 +348,18 @@ class _ResultReleasePageState
 
                     FutureBuilder<int>(
 
-                      future: service.getTeachersPending(),
+                      future:
+                      selectedDepartment == "All" ||
+                          selectedYear == "All" ||
+                          selectedSection == "All" ||
+                          selectedSemester == 0
+                          ? Future.value(0)
+                          : service.getTeachersPending(
+                        department: selectedDepartment,
+                        year: selectedYear,
+                        semester: selectedSemester,
+                        section: selectedSection,
+                      ),
 
                       builder: (context, snapshot) {
 
@@ -313,29 +384,30 @@ class _ResultReleasePageState
                     ),
 
                     FutureBuilder<int>(
-
-                      future: service.getTotalMissingEntries(),
-
+                      future:
+                      selectedDepartment == "All" ||
+                          selectedYear == "All" ||
+                          selectedSection == "All" ||
+                          selectedSemester == 0
+                          ? Future.value(0)
+                          : service.getTotalMissingEntries(
+                        department: selectedDepartment,
+                        year: selectedYear,
+                        semester: selectedSemester,
+                        section: selectedSection,
+                      ),
                       builder: (context, snapshot) {
-
                         final totalMissing = snapshot.data ?? 0;
 
                         return ResultStatsCard(
-
                           title: "Missing Entries",
-
                           value: totalMissing.toString(),
-
                           icon: Icons.warning,
-
                           color: isDark
                               ? const Color(0xFF1E293B)
                               : Colors.white,
-
                         );
-
                       },
-
                     ),
 
                   ],
@@ -364,6 +436,10 @@ class _ResultReleasePageState
                     }
                     if (selectedYear != "All" &&
                         first["year"] != selectedYear) {
+                      return const SizedBox.shrink();
+                    }
+                    if (selectedSection != "All" &&
+                        first["section"] != selectedSection) {
                       return const SizedBox.shrink();
                     }
 
@@ -506,8 +582,9 @@ class _ResultReleasePageState
 
                                     return ElevatedButton(
                                       onPressed:
-                                      released || missingSnapshot.connectionState ==
-                                          ConnectionState.waiting || missing > 0
+                                      released ||
+                                          missingSnapshot.connectionState ==
+                                              ConnectionState.waiting
                                           ? null
                                           : () async {
                                         try {
@@ -539,11 +616,7 @@ class _ResultReleasePageState
                                         }
                                       },
                                       child: Text(
-                                        released
-                                            ? "Released"
-                                            : missing > 0
-                                            ? "Missing $missing"
-                                            : "Release",
+                                        released ? "Released" : "Release",
                                       ),
                                     );
                                   },
