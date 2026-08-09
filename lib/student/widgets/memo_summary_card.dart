@@ -11,10 +11,13 @@ class MemoSummaryCard extends StatelessWidget {
 
   Map<String, dynamic> calculateGrade({
     required double average,
+    required double external,
     required double total,
   }) {
     final pass =
-        average >= 14 && total >= 40;
+        average >= 14 &&
+            external >= 21 &&
+            total >= 40;
 
     String grade = "F";
     int gradePoint = 0;
@@ -164,6 +167,7 @@ class MemoSummaryCard extends StatelessWidget {
     final gradeData =
     calculateGrade(
       average: average,
+      external: external!,
       total: total,
     );
 
@@ -302,33 +306,36 @@ class MemoSummaryCard extends StatelessWidget {
 // FINAL SUBJECT RESULT
 // ----------------------------------------------------------
 
-    if (supplyResult != null &&
-        supplyResult["complete"] == true &&
-        supplyResult["pass"] == true) {
-      return supplyResult;
-    }
-
+// If Regular attempt passes, keep Regular result.
     if (regularResult != null &&
         regularResult["complete"] == true &&
         regularResult["pass"] == true) {
       return regularResult;
     }
 
-// If Supply is complete and failed,
+// If Regular fails and Supply passes,
+// use the Supply result.
+    if (supplyResult != null &&
+        supplyResult["complete"] == true &&
+        supplyResult["pass"] == true) {
+      return supplyResult;
+    }
+
+// If Supply is complete but failed,
 // use Supply result.
     if (supplyResult != null &&
         supplyResult["complete"] == true) {
       return supplyResult;
     }
 
-// If Regular is complete and failed,
+// If Regular is complete but failed,
 // use Regular result.
     if (regularResult != null &&
         regularResult["complete"] == true) {
       return regularResult;
     }
 
-// Otherwise the subject is still pending.
+// Otherwise pending.
     return supplyResult ??
         regularResult ??
         buildSubjectResult(marks);
@@ -362,34 +369,19 @@ class MemoSummaryCard extends StatelessWidget {
       totalCreditPoints +=
           credits * gradePoint;
 
-      // Marks for the subject are not complete yet.
       if (subject["complete"] != true) {
         allSubjectsComplete = false;
       }
 
-      // Subject failed.
       if (subject["pass"] != true) {
         allSubjectsPassed = false;
       }
     }
 
-    // ----------------------------------------------------------
-    // SGPA
-    // ----------------------------------------------------------
-
     final double sgpa =
     totalCredits == 0
         ? 0
         : totalCreditPoints / totalCredits;
-
-    // ----------------------------------------------------------
-    // CGPA
-    //
-    // A semester gets a CGPA only when:
-    // 1. All required marks are available
-    // 2. Every subject is PASS
-    // 3. Credits are available
-    // ----------------------------------------------------------
 
     final bool cgpaAvailable =
         semesterSubjects.isNotEmpty &&
@@ -399,11 +391,26 @@ class MemoSummaryCard extends StatelessWidget {
 
     return {
       "sgpa": sgpa,
-      "cgpa": cgpaAvailable ? sgpa : null,
+
+      // This is the semester's grade-point result.
+      // It becomes available only when the
+      // semester is completely passed.
+      "cgpa":
+      cgpaAvailable ? sgpa : null,
+
       "cgpaAvailable": cgpaAvailable,
-      "allSubjectsPassed": allSubjectsPassed,
-      "allSubjectsComplete": allSubjectsComplete,
-      "totalCredits": totalCredits,
+
+      "allSubjectsPassed":
+      allSubjectsPassed,
+
+      "allSubjectsComplete":
+      allSubjectsComplete,
+
+      "totalCredits":
+      totalCredits,
+
+      "totalCreditPoints":
+      totalCreditPoints,
     };
   }
 
@@ -595,19 +602,42 @@ class MemoSummaryCard extends StatelessWidget {
       semesterResults.keys.toList()
         ..sort();
 
-      final latestSemester =
-          semesters.last;
+      double cumulativeCredits = 0;
+      double cumulativeCreditPoints = 0;
 
-      final latestSemesterResult =
-      semesterResults[
-      latestSemester];
+      for (final semester in semesters) {
+        final result =
+        semesterResults[semester];
 
-      if (latestSemesterResult?["cgpaAvailable"] ==
-          true) {
+        final available =
+            result?["cgpaAvailable"] == true;
+
+        if (!available) {
+          // This semester has no valid CGPA
+          // because of pending/failed subjects.
+          continue;
+        }
+
+        final credits =
+            (result?["totalCredits"] as num?)
+                ?.toDouble() ??
+                0;
+
+        final creditPoints =
+            (result?["totalCreditPoints"] as num?)
+                ?.toDouble() ??
+                0;
+
+        cumulativeCredits += credits;
+
+        cumulativeCreditPoints +=
+            creditPoints;
+      }
+
+      if (cumulativeCredits > 0) {
         cgpa =
-            (latestSemesterResult?["cgpa"]
-            as num?)
-                ?.toDouble();
+            cumulativeCreditPoints /
+                cumulativeCredits;
       }
     }
 

@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../main.dart';
 import '../../services/firestore_service.dart';
-
+import 'academic_control_page.dart';
 import '../../timetables/timetable_upload_page.dart';
 import 'admin_analytics_page.dart';
 import 'admin_pending_fees_page.dart';
@@ -178,6 +178,7 @@ class AdminDashboardPage extends StatelessWidget {
                                 : Colors.black,
                           ),
                         ),
+
 
                         Text(
 
@@ -859,6 +860,21 @@ class AdminDashboardPage extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const SubjectManagementPage(),
+                        ),
+                      );
+                    },
+                  ),
+                  moduleCard(
+                    context,
+                    "Academic Control",
+                    Icons.school,
+                    Colors.blue,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                          const AcademicControlPage(),
                         ),
                       );
                     },

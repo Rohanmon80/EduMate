@@ -59,7 +59,12 @@ class _ResultReleasePageState
             doc.data() as Map<String, dynamic>;
 
             final key =
-                "${data["subjectCode"]}_${data["exam"]}";
+                "${data["department"]}_"
+                "${data["year"]}_"
+                "${data["semester"]}_"
+                "${data["section"]}_"
+                "${data["subjectCode"]}_"
+                "${data["exam"]}";
 
             grouped.putIfAbsent(key, () => []);
 
@@ -180,10 +185,25 @@ class _ResultReleasePageState
                             labelText: "Semester",
                             border: OutlineInputBorder(),
                           ),
-                          items: const [
-                            DropdownMenuItem(value: 0, child: Text("All")),
-                            DropdownMenuItem(value: 1, child: Text("1")),
-                            DropdownMenuItem(value: 2, child: Text("2")),
+                          items: [
+                            const DropdownMenuItem(
+                              value: 0,
+                              child: Text("All"),
+                            ),
+
+                            ...List.generate(
+                              8,
+                                  (index) {
+                                final semester = index + 1;
+
+                                return DropdownMenuItem(
+                                  value: semester,
+                                  child: Text(
+                                    "Semester $semester",
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                           onChanged: (value) {
                             setState(() {
@@ -472,27 +492,61 @@ class _ResultReleasePageState
 
                                 const Spacer(),
 
-                                ElevatedButton(
+                                FutureBuilder<int>(
+                                  future: service.getMissingEntries(
+                                    department: first["department"],
+                                    year: first["year"],
+                                    semester: first["semester"],
+                                    section: first["section"],
+                                    subjectCode: first["subjectCode"],
+                                    exam: first["exam"],
+                                  ),
+                                  builder: (context, missingSnapshot) {
+                                    final missing = missingSnapshot.data ?? 0;
 
-                                  onPressed: released
-                                      ? null
-                                      : () async {
+                                    return ElevatedButton(
+                                      onPressed:
+                                      released || missingSnapshot.connectionState ==
+                                          ConnectionState.waiting || missing > 0
+                                          ? null
+                                          : () async {
+                                        try {
+                                          for (final d in list) {
+                                            await service.releaseResult(d.id);
+                                          }
 
-                                    for (final d in list) {
-                                      await service.releaseResult(d.id);
-                                    }
+                                          if (!context.mounted) return;
 
-                                    if (!context.mounted) return;
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              backgroundColor: Colors.green,
+                                              content: Text(
+                                                "Results released successfully",
+                                              ),
+                                            ),
+                                          );
+                                        } catch (e) {
+                                          if (!context.mounted) return;
 
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text("Results released successfully"),
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              backgroundColor: Colors.red,
+                                              content: Text(
+                                                "Unable to release results: $e",
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      child: Text(
+                                        released
+                                            ? "Released"
+                                            : missing > 0
+                                            ? "Missing $missing"
+                                            : "Release",
                                       ),
                                     );
                                   },
-
-                                  child: const Text("Release"),
-
                                 ),
 
                               ],

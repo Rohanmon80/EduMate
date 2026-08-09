@@ -24,15 +24,13 @@ class _SemesterResultsPageState
 
   Map<String, dynamic> calculateGrade({
     required double average,
+    required double external,
     required double total,
   }) {
-    // Student FAILS if:
-    // 1. Average Mid/Internal < 14
-    // OR
-    // 2. Average + External < 40
-
     final bool pass =
-        average >= 14 && total >= 40;
+        average >= 14 &&
+            external >= 21 &&
+            total >= 40;
 
     String grade = "F";
     int gradePoint = 0;
@@ -73,9 +71,13 @@ class _SemesterResultsPageState
   Map<String, dynamic> buildSubjectResult(
       List<Map<String, dynamic>> marks,
       ) {
-    double? internal1;
-    double? internal2;
-    double? external;
+    double? regularInternal1;
+    double? regularInternal2;
+    double? regularExternal;
+
+    double? supplyInternal1;
+    double? supplyInternal2;
+    double? supplyExternal;
 
     bool isLab = false;
 
@@ -85,24 +87,20 @@ class _SemesterResultsPageState
 
     double credits = 0;
 
-    String examCategory = "Regular";
+    bool hasSupply = false;
 
     for (final item in marks) {
       subjectCode =
-          item["subjectCode"]?.toString() ??
-              subjectCode;
+          item["subjectCode"]?.toString() ?? subjectCode;
 
       subjectName =
-          item["subjectName"]?.toString() ??
-              subjectName;
+          item["subjectName"]?.toString() ?? subjectName;
 
       subjectType =
-          item["type"]?.toString() ??
-              subjectType;
+          item["type"]?.toString() ?? subjectType;
 
       final type =
-          item["type"]?.toString().toLowerCase() ??
-              "";
+          item["type"]?.toString().toLowerCase() ?? "";
 
       if (type == "lab") {
         isLab = true;
@@ -115,8 +113,10 @@ class _SemesterResultsPageState
               .toLowerCase() ??
               "regular";
 
-      if (category == "supply") {
-        examCategory = "Supply";
+      final isSupply = category == "supply";
+
+      if (isSupply) {
+        hasSupply = true;
       }
 
       final value =
@@ -127,29 +127,59 @@ class _SemesterResultsPageState
       }
 
       final exam =
-          item["exam"]?.toString().trim() ??
-              "";
+          item["exam"]?.toString().trim() ?? "";
 
+      // ============================================================
       // THEORY
+      // ============================================================
+
       if (!isLab) {
         if (exam == "Mid 1") {
-          internal1 = value;
+          if (isSupply) {
+            supplyInternal1 = value;
+          } else {
+            regularInternal1 = value;
+          }
         } else if (exam == "Mid 2") {
-          internal2 = value;
-        } else if (exam == "Sem External" ||
+          if (isSupply) {
+            supplyInternal2 = value;
+          } else {
+            regularInternal2 = value;
+          }
+        } else if (
+        exam == "Sem External" ||
             exam == "External") {
-          external = value;
+          if (isSupply) {
+            supplyExternal = value;
+          } else {
+            regularExternal = value;
+          }
         }
       }
 
+      // ============================================================
       // LAB
+      // ============================================================
+
       else {
         if (exam == "Lab Internal 1") {
-          internal1 = value;
+          if (isSupply) {
+            supplyInternal1 = value;
+          } else {
+            regularInternal1 = value;
+          }
         } else if (exam == "Lab Internal 2") {
-          internal2 = value;
+          if (isSupply) {
+            supplyInternal2 = value;
+          } else {
+            regularInternal2 = value;
+          }
         } else if (exam == "Lab External") {
-          external = value;
+          if (isSupply) {
+            supplyExternal = value;
+          } else {
+            regularExternal = value;
+          }
         }
       }
 
@@ -162,8 +192,66 @@ class _SemesterResultsPageState
     }
 
     // ============================================================
-    // MISSING MARKS
-    // ============================================================
+// SELECT REGULAR RESULT FIRST
+// ============================================================
+
+    final double? regularAverage =
+    regularInternal1 != null &&
+        regularInternal2 != null
+        ? (regularInternal1 + regularInternal2) / 2
+        : null;
+
+    final double? regularTotal =
+    regularAverage != null &&
+        regularExternal != null
+        ? regularAverage + regularExternal
+        : null;
+
+    final bool regularPassed =
+        regularAverage != null &&
+            regularExternal != null &&
+            regularAverage >= 14 &&
+            regularExternal >= 21 &&
+            regularTotal! >= 40;
+
+
+// ============================================================
+// FINAL RESULT
+//
+// If Regular passes:
+//     use Regular marks.
+//
+// If Regular fails:
+//     use Supply marks where available,
+//     otherwise keep the Regular mark.
+// ============================================================
+
+    final double? internal1 =
+    regularPassed
+        ? regularInternal1
+        : supplyInternal1 ?? regularInternal1;
+
+    final double? internal2 =
+    regularPassed
+        ? regularInternal2
+        : supplyInternal2 ?? regularInternal2;
+
+    final double? external =
+    regularPassed
+        ? regularExternal
+        : supplyExternal ?? regularExternal;
+
+    final String examCategory =
+    regularPassed
+        ? "Regular"
+        : hasSupply
+        ? "Supply"
+        : "Regular";
+
+
+// ============================================================
+// MISSING MARKS
+// ============================================================
 
     if (internal1 == null ||
         internal2 == null ||
@@ -185,30 +273,29 @@ class _SemesterResultsPageState
       };
     }
 
-    // ============================================================
-    // INTERNAL / MID AVERAGE
-    // ============================================================
+
+// ============================================================
+// FINAL CALCULATION
+// ============================================================
 
     final average =
         (internal1 + internal2) / 2;
 
-    // ============================================================
-    // FINAL TOTAL
-    // ============================================================
-
     final total =
         average + external;
 
-    // ============================================================
-    // PASS RULE
-    //
-    // Average Mid/Internal >= 14
-    // AND
-    // Average + External >= 40
-    // ============================================================
+
+// ============================================================
+// FINAL PASS RULE
+//
+// 1. Average Mid >= 14
+// 2. External >= 21
+// 3. Average Mid + External >= 40
+// ============================================================
 
     final passed =
         average >= 14 &&
+            external! >= 21 &&
             total >= 40;
 
     // ============================================================
@@ -334,8 +421,7 @@ class _SemesterResultsPageState
 
     final completedCGPAs = <double>[];
 
-    double cumulativeCreditPoints = 0;
-    double cumulativeCredits = 0;
+
 
     final sortedSemesters =
     semesterMarks.keys.toList()..sort();
@@ -358,15 +444,7 @@ class _SemesterResultsPageState
           continue;
         }
 
-        final category =
-            mark["examCategory"]
-                ?.toString()
-                .trim()
-                .toLowerCase() ??
-                "regular";
-
-        final key =
-            "${code}_$category";
+        final key = code;
 
         subjects
             .putIfAbsent(
@@ -402,7 +480,7 @@ class _SemesterResultsPageState
       );
 
       if (!semesterCompleted) {
-        continue;
+        return[];
       }
 
       double semesterCredits = 0;
@@ -429,18 +507,12 @@ class _SemesterResultsPageState
         continue;
       }
 
-      cumulativeCredits +=
-          semesterCredits;
-
-      cumulativeCreditPoints +=
-          semesterCreditPoints;
-
-      final cumulativeCGPA =
-          cumulativeCreditPoints /
-              cumulativeCredits;
+      final semesterCGPA =
+          semesterCreditPoints /
+              semesterCredits;
 
       completedCGPAs.add(
-        cumulativeCGPA,
+        semesterCGPA,
       );
     }
 
@@ -531,8 +603,7 @@ class _SemesterResultsPageState
                 .toLowerCase() ??
                 "regular";
 
-        final key =
-            "${code}_$category";
+        final key = code;
 
         subjects
             .putIfAbsent(
@@ -893,15 +964,7 @@ class _SemesterResultsPageState
                         continue;
                       }
 
-                      final category =
-                          data["examCategory"]
-                              ?.toString()
-                              .trim()
-                              .toLowerCase() ??
-                              "regular";
-
-                      final key =
-                          "${code}_${category}";
+                      final key = code;
 
                       grouped.putIfAbsent(
                         key,
