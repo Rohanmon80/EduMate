@@ -346,42 +346,6 @@ class _ResultReleasePageState
 
                     ),
 
-                    FutureBuilder<int>(
-
-                      future:
-                      selectedDepartment == "All" ||
-                          selectedYear == "All" ||
-                          selectedSection == "All" ||
-                          selectedSemester == 0
-                          ? Future.value(0)
-                          : service.getTeachersPending(
-                        department: selectedDepartment,
-                        year: selectedYear,
-                        semester: selectedSemester,
-                        section: selectedSection,
-                      ),
-
-                      builder: (context, snapshot) {
-
-                        final pending = snapshot.data ?? 0;
-
-                        return ResultStatsCard(
-
-                          title: "Teachers Pending",
-
-                          value: pending.toString(),
-
-                          icon: Icons.person,
-
-                          color: isDark
-                              ? const Color(0xFF1E293B)
-                              : Colors.white,
-
-                        );
-
-                      },
-
-                    ),
 
                     FutureBuilder<int>(
                       future:
@@ -452,7 +416,16 @@ class _ResultReleasePageState
                       return const SizedBox.shrink();
                     }
 
-                    final uploaded = list.length;
+                    final uploadedStudentIds = list
+                        .map((doc) {
+                      final data =
+                      doc.data() as Map<String, dynamic>;
+                      return data["studentId"]?.toString();
+                    })
+                        .where((id) => id != null && id.isNotEmpty)
+                        .toSet();
+
+                    final uploaded = uploadedStudentIds.length;
 
                     final released = first["released"] == true;
 

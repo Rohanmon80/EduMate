@@ -605,25 +605,39 @@ class _TeacherMarksPageState extends State<TeacherMarksPage> {
               return;
             }
 
-            final marks =
-            int.tryParse(controller.text.trim());
+            final marks = int.tryParse(controller.text.trim());
 
-            if (marks == null ||
-                marks < 0 ||
-                marks > 100) {
+            int maxMarks;
+
+            if (subjectType == "Lab") {
+              if (exam == "Lab External") {
+                maxMarks = 60;
+              } else {
+                maxMarks = 40;
+              }
+            } else {
+              if (exam == "Sem External") {
+                maxMarks = 60;
+              } else {
+                maxMarks = 40;
+              }
+            }
+
+            if (marks == null || marks < 0 || marks > maxMarks) {
               if (!mounted) return;
 
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   backgroundColor: Colors.red,
                   content: Text(
-                    "Marks must be between 0 and 100.",
+                    "Marks must be between 0 and $maxMarks.",
                   ),
                 ),
               );
 
               return;
             }
+
           }
 
           // --------------------------------------------------------

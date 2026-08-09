@@ -92,7 +92,10 @@ class ResultReleaseService {
     required int semester,
     required String section,
   }) async {
-    final students = await _firestore
+    // ------------------------------------------------------------
+    // 1. Get all students for this class
+    // ------------------------------------------------------------
+    final studentsSnapshot = await _firestore
         .collection("users")
         .where("role", isEqualTo: "student")
         .where("department", isEqualTo: department)
@@ -101,11 +104,33 @@ class ResultReleaseService {
         .where("section", isEqualTo: section)
         .get();
 
-    if (students.docs.isEmpty) {
+    final students = studentsSnapshot.docs;
+
+    if (students.isEmpty) {
       return 0;
     }
 
-    final marks = await _firestore
+    // ------------------------------------------------------------
+    // 2. Get all subjects for this semester
+    // ------------------------------------------------------------
+    final subjectsSnapshot = await _firestore
+        .collection("subjects")
+        .where("department", isEqualTo: department)
+        .where("year", isEqualTo: year)
+        .where("semester", isEqualTo: semester)
+        .where("isActive", isEqualTo: true)
+        .get();
+
+    final subjects = subjectsSnapshot.docs;
+
+    if (subjects.isEmpty) {
+      return 0;
+    }
+
+    // ------------------------------------------------------------
+    // 3. Get uploaded marks for this class
+    // ------------------------------------------------------------
+    final marksSnapshot = await _firestore
         .collection("student_marks")
         .where("department", isEqualTo: department)
         .where("year", isEqualTo: year)
@@ -113,70 +138,85 @@ class ResultReleaseService {
         .where("section", isEqualTo: section)
         .get();
 
-    // Unique student + subject + exam combinations.
-    final uploadedCombinations = marks.docs.map((doc) {
+    // ------------------------------------------------------------
+    // 4. Create unique uploaded combinations
+    //
+    // student + subject + exam
+    // ------------------------------------------------------------
+    final uploaded = <String>{};
+
+    for (final doc in marksSnapshot.docs) {
       final data = doc.data();
 
       final studentId =
-          data["studentId"]?.toString() ?? "";
+      data["studentId"]?.toString();
 
       final subjectCode =
-          data["subjectCode"]?.toString() ?? "";
+      data["subjectCode"]?.toString();
 
       final exam =
-          data["exam"]?.toString() ?? "";
+      data["exam"]?.toString();
 
-      return "$studentId|$subjectCode|$exam";
-    }).toSet();
+      if (studentId == null ||
+          subjectCode == null ||
+          exam == null ||
+          studentId.isEmpty ||
+          subjectCode.isEmpty ||
+          exam.isEmpty) {
+        continue;
+      }
 
-    /*
-   * This function should only be used as an overall
-   * uploaded-count helper.
-   *
-   * Exact missing count for a particular subject/exam
-   * must use getMissingEntries().
-   */
+      uploaded.add(
+        "$studentId|$subjectCode|$exam",
+      );
+    }
 
-    return uploadedCombinations.isEmpty
-        ? students.docs.length
-        : 0;
-  }
-  Future<int> getTeachersPending({
-    required String department,
-    required String year,
-    required int semester,
-    required String section,
-  }) async {
-    final teachers = await _firestore
-        .collection("teachers")
-        .get();
+    // ------------------------------------------------------------
+    // 5. Calculate expected entries
+    // ------------------------------------------------------------
+    int totalMissing = 0;
 
-    final marks = await _firestore
-        .collection("student_marks")
-        .where("department", isEqualTo: department)
-        .where("year", isEqualTo: year)
-        .where("semester", isEqualTo: semester)
-        .where("section", isEqualTo: section)
-        .get();
+    for (final student in students) {
+      final studentId = student.id;
 
-    final uploadedTeacherIds = marks.docs
-        .map(
-          (doc) =>
-          doc.data()["teacherId"]?.toString(),
-    )
-        .where(
-          (id) => id != null && id.isNotEmpty,
-    )
-        .toSet();
+      for (final subject in subjects) {
+        final data = subject.data();
 
-    int pending = 0;
+        final subjectCode =
+        data["subjectCode"]?.toString();
 
-    for (final teacher in teachers.docs) {
-      if (!uploadedTeacherIds.contains(teacher.id)) {
-        pending++;
+        if (subjectCode == null ||
+            subjectCode.isEmpty) {
+          continue;
+        }
+
+        final type =
+            data["type"]?.toString().toLowerCase() ??
+                "theory";
+
+        final exams = type == "lab"
+            ? [
+          "Lab Internal 1",
+          "Lab Internal 2",
+          "Lab External",
+        ]
+            : [
+          "Mid 1",
+          "Mid 2",
+          "Sem External",
+        ];
+
+        for (final exam in exams) {
+          final key =
+              "$studentId|$subjectCode|$exam";
+
+          if (!uploaded.contains(key)) {
+            totalMissing++;
+          }
+        }
       }
     }
 
-    return pending;
+    return totalMissing;
   }
 }
