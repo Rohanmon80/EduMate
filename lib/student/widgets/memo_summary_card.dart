@@ -615,7 +615,11 @@ class MemoSummaryCard extends StatelessWidget {
 
     double totalCredits = 0;
 
-    for (final subject in subjects) {
+    final selectedSemesterSubjects =
+        semesterSubjects[semester] ?? [];
+
+    for (final subject
+    in selectedSemesterSubjects) {
       totalCredits +=
           (subject["credits"] as num?)
               ?.toDouble() ??
@@ -778,8 +782,8 @@ class MemoSummaryCard extends StatelessWidget {
     // ----------------------------------------------------------
 
     final bool allSubjectsPassed =
-        subjects.isNotEmpty &&
-            subjects.every(
+        selectedSemesterSubjects.isNotEmpty &&
+            selectedSemesterSubjects.every(
                   (subject) =>
               subject["pass"] == true,
             );

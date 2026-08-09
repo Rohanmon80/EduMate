@@ -40,132 +40,229 @@ class _MemoSubjectTableState
     )
         .get();
   }
+  Future<QuerySnapshot> loadExpectedSubjects() async {
+    final uid =
+        FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null) {
+      throw Exception("Student not logged in");
+    }
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(uid)
+        .get();
+
+    if (!userDoc.exists) {
+      throw Exception("Student profile not found");
+    }
+
+    final userData =
+    userDoc.data() as Map<String, dynamic>;
+
+    return FirebaseFirestore.instance
+        .collection("subjects")
+        .where(
+      "department",
+      isEqualTo: userData["department"],
+    )
+        .where(
+      "semester",
+      isEqualTo: widget.semester,
+    )
+        .get();
+  }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<QuerySnapshot>(
       future: loadResults(),
-
-      builder: (context, snapshot) {
-        if (snapshot.connectionState ==
+      builder: (context, marksSnapshot) {
+        if (marksSnapshot.connectionState ==
             ConnectionState.waiting) {
           return const Center(
             child: CircularProgressIndicator(),
           );
         }
 
-        if (snapshot.hasError) {
+        if (marksSnapshot.hasError) {
           return Center(
             child: Text(
-              "Unable to load memo marks.\n${snapshot.error}",
+              "Unable to load memo marks.\n${marksSnapshot.error}",
               textAlign: TextAlign.center,
             ),
           );
         }
 
-        if (!snapshot.hasData ||
-            snapshot.data!.docs.isEmpty) {
-          return const Center(
-            child: Text(
-              "No Results Available",
-            ),
-          );
-        }
+        final marksDocs =
+            marksSnapshot.data?.docs ?? [];
 
-        final docs = snapshot.data!.docs;
+        return FutureBuilder<QuerySnapshot>(
+          future: loadExpectedSubjects(),
+          builder: (context, subjectSnapshot) {
+            if (subjectSnapshot.connectionState ==
+                ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
 
-        // ======================================================
-// GROUP REGULAR + SUPPLY BY SUBJECT
-// ======================================================
-
-        final Map<String, List<Map<String, dynamic>>>
-        subjectGroups = {};
-
-        for (final doc in docs) {
-          final data =
-          doc.data() as Map<String, dynamic>;
-
-          final subjectCode =
-              data["subjectCode"]
-                  ?.toString()
-                  .trim() ??
-                  "";
-
-          if (subjectCode.isEmpty) {
-            continue;
-          }
-
-          subjectGroups.putIfAbsent(
-            subjectCode,
-                () => [],
-          );
-
-          subjectGroups[subjectCode]!.add(data);
-        }
-
-
-        final rows = <TableRow>[];
-
-        for (final entry
-        in subjectGroups.entries) {
-          final result =
-          resolveSubjectResult(
-            entry.value,
-          );
-
-          rows.add(
-            buildRow(
-              entry.key,
-              result["subjectName"] ?? "",
-              result["credits"] ?? "-",
-              result["grade"] ?? "F",
-              result["result"] ?? "FAIL",
-            ),
-          );
-        }
-
-        if (rows.isEmpty) {
-          return const Center(
-            child: Text(
-              "No subject results available.",
-            ),
-          );
-        }
-
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-
-          child: Table(
-            border: TableBorder.all(
-              color: Colors.black,
-            ),
-
-            columnWidths: const {
-              0: FixedColumnWidth(120),
-              1: FixedColumnWidth(180),
-              2: FixedColumnWidth(80),
-              3: FixedColumnWidth(80),
-              4: FixedColumnWidth(90),
-            },
-
-            children: [
-              const TableRow(
-                decoration: BoxDecoration(
-                  color: Color(0xFFE8E8E8),
+            if (subjectSnapshot.hasError) {
+              return Center(
+                child: Text(
+                  "Unable to load subjects.\n${subjectSnapshot.error}",
+                  textAlign: TextAlign.center,
                 ),
+              );
+            }
 
+            final subjectDocs =
+                subjectSnapshot.data?.docs ?? [];
+
+            final Map<String, List<Map<String, dynamic>>>
+            subjectGroups = {};
+
+            // --------------------------------------------------
+            // GROUP REGULAR + SUPPLY MARKS
+            // --------------------------------------------------
+
+            for (final doc in marksDocs) {
+              final data =
+              doc.data() as Map<String, dynamic>;
+
+              final subjectCode =
+                  data["subjectCode"]
+                      ?.toString()
+                      .trim() ??
+                      "";
+
+              if (subjectCode.isEmpty) {
+                continue;
+              }
+
+              subjectGroups.putIfAbsent(
+                subjectCode,
+                    () => [],
+              );
+
+              subjectGroups[subjectCode]!.add(data);
+            }
+
+            // --------------------------------------------------
+            // ADD ADMIN SUBJECTS WITH NO MARKS
+            // --------------------------------------------------
+
+            for (final doc in subjectDocs) {
+              final data =
+              doc.data() as Map<String, dynamic>;
+
+              final subjectCode =
+                  data["subjectCode"]
+                      ?.toString()
+                      .trim() ??
+                      "";
+
+              if (subjectCode.isEmpty) {
+                continue;
+              }
+
+              if (!subjectGroups.containsKey(subjectCode)) {
+                subjectGroups[subjectCode] = [
+                  {
+                    "subjectCode": subjectCode,
+                    "subjectName":
+                    data["subjectName"]
+                        ?.toString() ??
+                        "",
+                    "credits":
+                    (data["credits"] as num?)
+                        ?.toDouble() ??
+                        0,
+                    "type":
+                    data["type"]
+                        ?.toString() ??
+                        "Theory",
+                    "semester":
+                    widget.semester,
+                    "pendingSubject": true,
+                  },
+                ];
+              }
+            }
+
+            if (subjectGroups.isEmpty) {
+              return const Center(
+                child: Text(
+                  "No subjects available for this semester.",
+                ),
+              );
+            }
+
+            final rows = <TableRow>[];
+
+            for (final entry
+            in subjectGroups.entries) {
+              final marks = entry.value;
+
+              Map<String, dynamic> result;
+
+              if (marks.length == 1 &&
+                  marks.first["pendingSubject"] == true) {
+                result = {
+                  "subjectName":
+                  marks.first["subjectName"] ?? "",
+                  "credits":
+                  marks.first["credits"] ?? 0,
+                  "grade": "Pending",
+                  "result": "PENDING",
+                };
+              } else {
+                result =
+                    resolveSubjectResult(marks);
+              }
+
+              rows.add(
+                buildRow(
+                  entry.key,
+                  result["subjectName"] ?? "",
+                  result["credits"] ?? "-",
+                  result["grade"] ?? "F",
+                  result["result"] ?? "FAIL",
+                ),
+              );
+            }
+
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Table(
+                border: TableBorder.all(
+                  color: Colors.black,
+                ),
+                columnWidths: const {
+                  0: FixedColumnWidth(120),
+                  1: FixedColumnWidth(180),
+                  2: FixedColumnWidth(80),
+                  3: FixedColumnWidth(80),
+                  4: FixedColumnWidth(90),
+                },
                 children: [
-                  HeaderCell("Subject Code"),
-                  HeaderCell("Subject Name"),
-                  HeaderCell("Credits"),
-                  HeaderCell("Grade"),
-                  HeaderCell("Result"),
+                  const TableRow(
+                    decoration: BoxDecoration(
+                      color: Color(0xFFE8E8E8),
+                    ),
+                    children: [
+                      HeaderCell("Subject Code"),
+                      HeaderCell("Subject Name"),
+                      HeaderCell("Credits"),
+                      HeaderCell("Grade"),
+                      HeaderCell("Result"),
+                    ],
+                  ),
+                  ...rows,
                 ],
               ),
-
-              ...rows,
-            ],
-          ),
+            );
+          },
         );
       },
     );
