@@ -26,9 +26,7 @@ class ExcelService {
     final file = result.files.first;
 
     if (file.bytes == null) {
-      throw Exception(
-        "Unable to read the selected Excel file.",
-      );
+      throw Exception("Unable to read the selected Excel file.");
     }
 
     final Uint8List bytes = file.bytes!;
@@ -45,11 +43,7 @@ class ExcelService {
       }
 
       for (final row in sheet.rows) {
-        rows.add(
-          row.map(
-                (cell) => cell?.value,
-          ).toList(),
-        );
+        rows.add(row.map((cell) => cell?.value).toList());
       }
 
       // Only read the first worksheet.
@@ -72,21 +66,22 @@ class ExcelService {
     sheet.appendRow([
       TextCellValue("RollNumber"),
       TextCellValue("SubjectCode"),
-      TextCellValue("Exam"),
-      TextCellValue("ExamCategory"),
-      TextCellValue("Marks"),
+      TextCellValue("Mid 1"),
+      TextCellValue("Mid 2"),
+      TextCellValue("External"),
+      TextCellValue("Lab Internal 1"),
+      TextCellValue("Lab Internal 2"),
+      TextCellValue("Lab External"),
+      TextCellValue("Type"),
     ]);
 
     final bytes = excel.save();
 
     if (bytes == null) {
-      throw Exception(
-        "Unable to create Excel template.",
-      );
+      throw Exception("Unable to create Excel template.");
     }
 
-    final directory =
-    await getTemporaryDirectory();
+    final directory = await getTemporaryDirectory();
 
     final file = File(
       "${directory.path}/EduMate_Student_Marks_Template.xlsx",
@@ -95,11 +90,8 @@ class ExcelService {
     await file.writeAsBytes(bytes);
 
     await Share.shareXFiles(
-      [
-        XFile(file.path),
-      ],
-      text:
-      "EduMate Student Marks Excel Template",
+      [XFile(file.path)],
+      text: "EduMate Student Marks Excel Template",
     );
 
     return file.path;
@@ -114,8 +106,7 @@ class ExcelService {
     required String teacherId,
     required String teacherName,
   }) async {
-    final firestore =
-        FirebaseFirestore.instance;
+    final firestore = FirebaseFirestore.instance;
 
     // ------------------------------------------------------------
     // 1. Basic Excel check
@@ -134,25 +125,20 @@ class ExcelService {
     final requiredHeaders = [
       "RollNumber",
       "SubjectCode",
-      "Exam",
-      "ExamCategory",
-      "Marks",
+      "Mid 1",
+      "Mid 2",
+      "External",
+      "Lab Internal 1",
+      "Lab Internal 2",
+      "Lab External",
+      "Type",
     ];
 
-    final header = rows.first
-        .map(
-          (e) => e.toString().trim(),
-    )
-        .toList();
+    final header = rows.first.map((e) => e.toString().trim()).toList();
 
-    final headerIndex =
-    <String, int>{};
+    final headerIndex = <String, int>{};
 
-    for (
-    int i = 0;
-    i < header.length;
-    i++
-    ) {
+    for (int i = 0; i < header.length; i++) {
       final name = header[i];
 
       if (name.isNotEmpty) {
@@ -160,13 +146,9 @@ class ExcelService {
       }
     }
 
-    final missingHeaders =
-    requiredHeaders.where(
-      (required) =>
-      !headerIndex.containsKey(
-      required,
-    ),
-    ).toList();
+    final missingHeaders = requiredHeaders
+        .where((required) => !headerIndex.containsKey(required))
+        .toList();
 
     if (missingHeaders.isNotEmpty) {
     throw Exception(
@@ -181,56 +163,38 @@ class ExcelService {
     // 3. Read data rows
     // ------------------------------------------------------------
 
-    final dataRows =
-    rows.skip(1).where((row) {
+    final dataRows = rows.skip(1).where((row) {
     return row.any(
-    (cell) =>
-    cell != null &&
-    cell.toString().trim().isNotEmpty,
+    (cell) => cell != null && cell.toString().trim().isNotEmpty,
     );
     }).toList();
 
     if (dataRows.isEmpty) {
-    throw Exception(
-    "No marks data found in the Excel file.",
-    );
+    throw Exception("No marks data found in the Excel file.");
     }
 
     // ------------------------------------------------------------
     // 4. Helper for reading cells
     // ------------------------------------------------------------
 
-    String readCell(
-    List<dynamic> row,
-    String column,
-    ) {
-    final index =
-    headerIndex[column];
+    String readCell(List<dynamic> row, String column) {
+    final index = headerIndex[column];
 
-    if (index == null ||
-    index >= row.length) {
+    if (index == null || index >= row.length) {
     return "";
     }
 
-    return row[index]
-        ?.toString()
-        .trim() ??
-    "";
+    return row[index]?.toString().trim() ?? "";
     }
 
     // ------------------------------------------------------------
     // 5. Cache students and subjects
     // ------------------------------------------------------------
 
-    final Map<
-    String,
-    DocumentSnapshot<Map<String, dynamic>>>
-    studentCache = {};
+    final Map<String, DocumentSnapshot<Map<String, dynamic>>> studentCache =
+    {};
 
-    final Map<
-    String,
-    Map<String, dynamic>>
-    subjectCache = {};
+    final Map<String, Map<String, dynamic>> subjectCache = {};
 
     // ------------------------------------------------------------
     // 6. Validate every row
@@ -241,40 +205,15 @@ class ExcelService {
 
     final List<String> validationErrors = [];
 
-    for (
-    int i = 0;
-    i < dataRows.length;
-    i++
-    ) {
+    for (int i = 0; i < dataRows.length; i++) {
     final row = dataRows[i];
-
     final excelRowNumber = i + 2;
 
-    final rollNumber = readCell(
-    row,
-    "RollNumber",
-    );
+    final rollNumber = readCell(row, "RollNumber");
 
-    final subjectCode = readCell(
-    row,
-    "SubjectCode",
-    );
+    final subjectCode = readCell(row, "SubjectCode");
 
-    final exam = readCell(
-    row,
-    "Exam",
-    );
-
-    final examCategory =
-    readCell(
-    row,
-    "ExamCategory",
-    );
-
-    final marksText = readCell(
-    row,
-    "Marks",
-    );
+    final type = readCell(row, "Type");
 
     // ----------------------------------------------------------
     // Roll Number
@@ -285,20 +224,11 @@ class ExcelService {
     "Row $excelRowNumber: RollNumber is empty.",
     );
     } else {
-    if (!studentCache.containsKey(
-    rollNumber,
-    )) {
-    final studentSnapshot =
-    await firestore
+    if (!studentCache.containsKey(rollNumber)) {
+    final studentSnapshot = await firestore
         .collection("users")
-        .where(
-    "role",
-    isEqualTo: "student",
-    )
-        .where(
-    "rollNumber",
-    isEqualTo: rollNumber,
-    )
+        .where("role", isEqualTo: "student")
+        .where("rollNumber", isEqualTo: rollNumber)
         .limit(1)
         .get();
 
@@ -309,8 +239,7 @@ class ExcelService {
     "$rollNumber does not exist.",
     );
     } else {
-    studentCache[rollNumber] =
-    studentSnapshot.docs.first;
+    studentCache[rollNumber] = studentSnapshot.docs.first;
     }
     }
     }
@@ -324,16 +253,10 @@ class ExcelService {
     "Row $excelRowNumber: SubjectCode is empty.",
     );
     } else {
-    if (!subjectCache.containsKey(
-    subjectCode,
-    )) {
-    final subjectSnapshot =
-    await firestore
+    if (!subjectCache.containsKey(subjectCode)) {
+    final subjectSnapshot = await firestore
         .collection("subjects")
-        .where(
-    "subjectCode",
-    isEqualTo: subjectCode,
-    )
+        .where("subjectCode", isEqualTo: subjectCode)
         .limit(1)
         .get();
 
@@ -343,71 +266,95 @@ class ExcelService {
     "Subject $subjectCode does not exist.",
     );
     } else {
-    subjectCache[subjectCode] =
-    subjectSnapshot.docs.first.data();
+    subjectCache[subjectCode] = subjectSnapshot.docs.first.data();
     }
     }
     }
 
     // ----------------------------------------------------------
-    // Exam
+    // Type
     // ----------------------------------------------------------
 
-    if (exam.isEmpty) {
-    validationErrors.add(
-    "Row $excelRowNumber: Exam is empty.",
-    );
-    }
-
-    // ----------------------------------------------------------
-    // Regular / Supply
-    // ----------------------------------------------------------
-
-    if (examCategory != "Regular" &&
-    examCategory != "Supply") {
+    if (type != "Regular" && type != "Supply") {
     validationErrors.add(
     "Row $excelRowNumber: "
-    "ExamCategory must be Regular or Supply.",
+    "Type must be Regular or Supply.",
     );
     }
 
     // ----------------------------------------------------------
-    // Marks
+    // Determine Theory / Lab
     // ----------------------------------------------------------
 
-    final marks = double.tryParse(marksText);
+    final subjectData = subjectCache[subjectCode];
 
-    if (marks == null) {
-    validationErrors.add(
-    "Row $excelRowNumber: "
-    "Marks must be numeric.",
-    );
+    if (subjectData == null) {
+    continue;
+    }
+
+    final subjectType =
+    subjectData["type"]?.toString().toLowerCase() ?? "";
+
+    final bool isLab =
+    subjectType == "lab" || subjectType.contains("lab");
+
+    final List<String> marksColumns;
+
+    if (isLab) {
+    marksColumns = [
+    "Lab Internal 1",
+    "Lab Internal 2",
+    "Lab External",
+    ];
     } else {
-    int maxMarks;
+    marksColumns = [
+    "Mid 1",
+    "Mid 2",
+    "External",
+    ];
+    }
 
-    if (exam == "Sem External" ||
-    exam == "Lab External") {
-    maxMarks = 60;
-    } else if (exam == "Mid 1" ||
-    exam == "Mid 2" ||
-    exam == "Lab Internal 1" ||
-    exam == "Lab Internal 2") {
-    maxMarks = 40;
-    } else {
+    // ----------------------------------------------------------
+    // Validate marks
+    // ----------------------------------------------------------
+
+    bool hasAtLeastOneMark = false;
+
+    for (final column in marksColumns) {
+    final text = readCell(row, column);
+
+    if (text.isEmpty) {
+    continue;
+    }
+
+    hasAtLeastOneMark = true;
+
+    final value = double.tryParse(text);
+
+    if (value == null) {
     validationErrors.add(
     "Row $excelRowNumber: "
-    "Invalid exam: $exam.",
+    "$column marks must be numeric.",
     );
     continue;
     }
 
-    if (marks < 0 || marks > maxMarks) {
+    final int maxMarks = column.contains("External") ? 60 : 40;
+
+    if (value < 0 || value > maxMarks) {
     validationErrors.add(
     "Row $excelRowNumber: "
-    "Marks must be between 0 and $maxMarks "
-    "for $exam.",
+    "$column marks must be between "
+    "0 and $maxMarks.",
     );
     }
+    }
+
+    if (!hasAtLeastOneMark) {
+    validationErrors.add(
+    "Row $excelRowNumber: "
+    "At least one mark must be entered.",
+    );
     }
     }
 
@@ -428,8 +375,7 @@ class ExcelService {
     // 8. Firestore batch
     // ------------------------------------------------------------
 
-    final batch =
-    firestore.batch();
+    final batch = firestore.batch();
 
     int imported = 0;
 
@@ -438,223 +384,176 @@ class ExcelService {
     // ------------------------------------------------------------
 
     for (final row in dataRows) {
-    final rollNumber =
-    readCell(
-    row,
-    "RollNumber",
-    );
+    final rollNumber = readCell(row, "RollNumber");
 
-    final subjectCode =
-    readCell(
-    row,
-    "SubjectCode",
-    );
+    final subjectCode = readCell(row, "SubjectCode");
 
-    final exam =
-    readCell(
-    row,
-    "Exam",
-    );
-
-    final examCategory =
-    readCell(
-    row,
-    "ExamCategory",
-    );
-
-    final marks =
-    double.parse(
-    readCell(
-    row,
-    "Marks",
-    ),
-    );
+    final type = readCell(row, "Type");
 
     // ----------------------------------------------------------
-    // Get student from Firebase
+    // Get student
     // ----------------------------------------------------------
 
-    final studentDoc =
-    studentCache[rollNumber];
+    final studentDoc = studentCache[rollNumber];
 
     if (studentDoc == null) {
     continue;
     }
 
-    final studentId =
-    studentDoc.id;
+    final studentId = studentDoc.id;
 
-    final studentData =
-    studentDoc.data();
+    final studentData = studentDoc.data();
 
     // ----------------------------------------------------------
-    // Get subject from Firebase
+    // Get subject
     // ----------------------------------------------------------
 
-    final subjectData =
-    subjectCache[subjectCode];
+    final subjectData = subjectCache[subjectCode];
 
     if (subjectData == null) {
     continue;
     }
 
     // ----------------------------------------------------------
-    // Firebase is the source of truth for semester
+    // Semester
     // ----------------------------------------------------------
 
-    final firebaseSemester =
-    (subjectData["semester"]
-    as num?)
-        ?.toInt();
+    final firebaseSemester = (subjectData["semester"] as num?)?.toInt();
 
     if (firebaseSemester == null) {
     throw Exception(
-    "Subject $subjectCode does not have a valid semester in Firebase.",
+    "Subject $subjectCode does not have "
+    "a valid semester in Firebase.",
     );
     }
 
     // ----------------------------------------------------------
-    // Firebase is the source of truth for credits
+    // Credits
     // ----------------------------------------------------------
 
-    final credits =
-    (subjectData["credits"]
-    as num?)
-        ?.toDouble();
+    final credits = (subjectData["credits"] as num?)?.toDouble();
 
     // ----------------------------------------------------------
-    // Firebase is the source of truth for subject information
+    // Subject information
     // ----------------------------------------------------------
 
-    final subjectName =
-    subjectData["subjectName"]
-        ?.toString() ??
-    "";
+    final subjectName = subjectData["subjectName"]?.toString() ?? "";
 
-    final subjectType =
-    subjectData["type"]
-        ?.toString() ??
-    "";
+    final subjectType = subjectData["type"]?.toString() ?? "";
+
+    final bool isLab = subjectType.toLowerCase() == "lab" ||
+    subjectType.toLowerCase().contains("lab");
 
     // ----------------------------------------------------------
-    // Create safe document ID
+    // Helper to upload one mark
     // ----------------------------------------------------------
 
-    final safeExam =
-    exam.replaceAll(
-    RegExp(
-    r'[^a-zA-Z0-9]+',
-    ),
+    void uploadMark({
+    required String column,
+    required String examName,
+    }) {
+    final marksText = readCell(row, column);
+
+    if (marksText.isEmpty) {
+    return;
+    }
+
+    final marks = double.parse(marksText);
+
+    final safeExam = examName.replaceAll(
+    RegExp(r'[^a-zA-Z0-9]+'),
     "_",
     );
 
-    final safeCategory =
-    examCategory.replaceAll(
-    RegExp(
-    r'[^a-zA-Z0-9]+',
-    ),
+    final safeCategory = type.replaceAll(
+    RegExp(r'[^a-zA-Z0-9]+'),
     "_",
     );
 
     final documentId =
     "${studentId}_${subjectCode}_${safeExam}_${safeCategory}";
 
-    final markRef =
-    firestore
-        .collection(
-    "student_marks",
-    )
-        .doc(documentId);
-
-    // ----------------------------------------------------------
-    // Save marks
-    // ----------------------------------------------------------
+    final markRef = firestore.collection("student_marks").doc(documentId);
 
     batch.set(
     markRef,
     {
-    // Student information from Firebase
-    "studentId":
-    studentId,
+    // Student
+    "studentId": studentId,
 
-    "rollNumber":
-    studentData?["rollNumber"] ??
-    rollNumber,
+    "rollNumber": studentData?["rollNumber"] ?? rollNumber,
 
-    "studentName":
-    studentData?["name"] ??
-    "",
+    "studentName": studentData?["name"] ?? "",
 
-    "department":
-    studentData?["department"] ??
-    "",
+    "department": studentData?["department"] ?? "",
 
-    "year":
-    studentData?["year"] ??
-    "",
+    "year": studentData?["year"] ?? "",
 
-    "section":
-    studentData?["section"] ??
-    "",
+    "section": studentData?["section"] ?? "",
 
-    // IMPORTANT:
-    // Semester comes from Firebase SUBJECT.
-    "semester":
-    firebaseSemester,
+    "semester": firebaseSemester,
 
-    "regulation":
-    studentData?["regulation"] ??
-    "",
+    "regulation": studentData?["regulation"] ?? "",
 
-    // Subject information from Firebase
-    "subjectCode":
-    subjectCode,
+    // Subject
+    "subjectCode": subjectCode,
 
-    "subjectName":
-    subjectName,
+    "subjectName": subjectName,
 
-    "type":
-    subjectType,
+    "type": subjectType,
 
-    "credits":
-    credits,
+    "credits": credits,
 
-    // Exam information from Excel
-    "exam":
-    exam,
+    // Exam
+    "exam": examName,
 
-    "examCategory":
-    examCategory,
+    "examCategory": type,
 
-    "marks":
-    marks,
+    "marks": marks,
 
-    // Teacher information
-    "teacherId":
-    teacherId,
+    // Teacher
+    "teacherId": teacherId,
 
-    "teacherName":
-    teacherName,
+    "teacherName": teacherName,
 
-    // Result status
-    "released":
-    false,
+    // Result
+    "released": false,
 
-    "uploadedAt":
-    FieldValue.serverTimestamp(),
+    "uploadedAt": FieldValue.serverTimestamp(),
 
-    "uploadedBy":
-    "teacher",
+    "uploadedBy": "teacher",
 
-    "uploadMethod":
-    "excel",
+    "uploadMethod": "excel",
     },
-    SetOptions(
-    merge: true,
-    ),
+    SetOptions(merge: true),
     );
 
     imported++;
+    }
+
+    // ----------------------------------------------------------
+    // THEORY
+    // ----------------------------------------------------------
+
+    if (!isLab) {
+    uploadMark(column: "Mid 1", examName: "Mid 1");
+
+    uploadMark(column: "Mid 2", examName: "Mid 2");
+
+    uploadMark(column: "External", examName: "Sem External");
+    }
+
+    // ----------------------------------------------------------
+    // LAB
+    // ----------------------------------------------------------
+
+    else {
+    uploadMark(column: "Lab Internal 1", examName: "Lab Internal 1");
+
+    uploadMark(column: "Lab Internal 2", examName: "Lab Internal 2");
+
+    uploadMark(column: "Lab External", examName: "Lab External");
+    }
     }
 
     // ------------------------------------------------------------
@@ -662,9 +561,7 @@ class ExcelService {
     // ------------------------------------------------------------
 
     if (imported == 0) {
-    throw Exception(
-    "No marks were imported.",
-    );
+    throw Exception("No marks were imported.");
     }
 
     await batch.commit();
