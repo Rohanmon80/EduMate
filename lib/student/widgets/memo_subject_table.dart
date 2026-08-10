@@ -469,7 +469,7 @@ class _MemoSubjectTableState
         return {
           "subjectName": subjectName,
           "credits": credits,
-          "grade": "F",
+          "grade": "Pending",
           "result": "PENDING",
         };
       }
@@ -505,7 +505,7 @@ class _MemoSubjectTableState
       return {
         "subjectName": subjectName,
         "credits": credits,
-        "grade": "F",
+        "grade": "Pending",
         "result": "PENDING",
       };
     }

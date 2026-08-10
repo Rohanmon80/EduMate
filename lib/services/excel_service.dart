@@ -375,22 +375,39 @@ class ExcelService {
     // Marks
     // ----------------------------------------------------------
 
-    final marks =
-    double.tryParse(
-    marksText,
-    );
+    final marks = double.tryParse(marksText);
 
     if (marks == null) {
     validationErrors.add(
     "Row $excelRowNumber: "
     "Marks must be numeric.",
     );
-    } else if (marks < 0 ||
-    marks > 100) {
+    } else {
+    int maxMarks;
+
+    if (exam == "Sem External" ||
+    exam == "Lab External") {
+    maxMarks = 60;
+    } else if (exam == "Mid 1" ||
+    exam == "Mid 2" ||
+    exam == "Lab Internal 1" ||
+    exam == "Lab Internal 2") {
+    maxMarks = 40;
+    } else {
     validationErrors.add(
     "Row $excelRowNumber: "
-    "Marks must be between 0 and 100.",
+    "Invalid exam: $exam.",
     );
+    continue;
+    }
+
+    if (marks < 0 || marks > maxMarks) {
+    validationErrors.add(
+    "Row $excelRowNumber: "
+    "Marks must be between 0 and $maxMarks "
+    "for $exam.",
+    );
+    }
     }
     }
 

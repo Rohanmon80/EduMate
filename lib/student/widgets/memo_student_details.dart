@@ -10,7 +10,7 @@ class MemoStudentDetails extends StatelessWidget {
     return FutureBuilder<DocumentSnapshot>(
 
       future: FirebaseFirestore.instance
-          .collection("students")
+          .collection("users")
           .doc(FirebaseAuth.instance.currentUser!.uid)
           .get(),
 

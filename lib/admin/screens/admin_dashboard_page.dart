@@ -9,7 +9,7 @@ import 'admin_analytics_page.dart';
 import 'admin_pending_fees_page.dart';
 import 'subject_management_page.dart';
 import 'admin_notices_page.dart';
-
+import 'result_release_page.dart';
 class AdminDashboardPage extends StatelessWidget {
 
   AdminDashboardPage({
@@ -864,6 +864,7 @@ class AdminDashboardPage extends StatelessWidget {
                       );
                     },
                   ),
+
                   moduleCard(
                     context,
                     "Academic Control",
@@ -879,6 +880,7 @@ class AdminDashboardPage extends StatelessWidget {
                       );
                     },
                   ),
+
 
                   moduleCard(
 

@@ -788,9 +788,17 @@ class MemoSummaryCard extends StatelessWidget {
               subject["pass"] == true,
             );
 
+    final bool anySubjectPending =
+    selectedSemesterSubjects.any(
+          (subject) =>
+      subject["complete"] != true,
+    );
+
     final result =
-    docs.isEmpty
+    selectedSemesterSubjects.isEmpty
         ? "NO RESULT"
+        : anySubjectPending
+        ? "PENDING"
         : allSubjectsPassed
         ? "PASS"
         : "FAIL";

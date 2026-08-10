@@ -227,19 +227,80 @@ class _SemesterResultsPageState extends State<SemesterResultsPage> {
     //     otherwise keep the Regular mark.
     // ============================================================
 
-    final double? internal1 = regularPassed
-        ? regularInternal1
-        : supplyInternal1 ?? regularInternal1;
+    // ============================================================
+// DETERMINE WHICH EXAM MUST BE CLEARED
+// ============================================================
 
-    final double? internal2 = regularPassed
-        ? regularInternal2
-        : supplyInternal2 ?? regularInternal2;
+    final bool midFailed =
+        regularAverage == null || regularAverage < 14;
 
-    final double? external =
-    regularPassed ? regularExternal : supplyExternal ?? regularExternal;
+    final bool externalFailed =
+        regularExternal == null || regularExternal < 21;
 
-    final String examCategory =
-    regularPassed ? "Regular" : hasSupply ? "Supply" : "Regular";
+// ------------------------------------------------------------
+// FINAL MARK SELECTION
+//
+// 1. Regular passes:
+//    Keep all Regular marks.
+//
+// 2. Mid failed:
+//    Student must repeat BOTH Mids.
+//    Both Supply Mids are required.
+//    External remains Regular if available.
+//
+// 3. Mid passed but External failed:
+//    Student repeats ONLY External.
+//    Regular Mid average is retained.
+//    Supply External is used.
+//
+// 4. Both Mid and External failed:
+//    Both Supply Mids AND Supply External are required.
+// ------------------------------------------------------------
+
+    double? internal1;
+    double? internal2;
+    double? external;
+
+    String examCategory;
+
+    if (!midFailed && !externalFailed) {
+      // ------------------------------------------
+      // REGULAR PASSED
+      // ------------------------------------------
+
+      internal1 = regularInternal1;
+      internal2 = regularInternal2;
+      external = regularExternal;
+
+      examCategory = "Regular";
+    } else if (midFailed) {
+      // ------------------------------------------
+      // MID FAILED
+      // BOTH MIDS MUST BE REPEATED
+      // ------------------------------------------
+
+      internal1 = supplyInternal1;
+      internal2 = supplyInternal2;
+
+      // External was passed → keep Regular External.
+      // External was also failed → require Supply External.
+      external = externalFailed
+          ? supplyExternal
+          : regularExternal;
+
+      examCategory = "Supply";
+    } else {
+      // ------------------------------------------
+      // MIDS PASSED
+      // ONLY EXTERNAL FAILED
+      // ------------------------------------------
+
+      internal1 = regularInternal1;
+      internal2 = regularInternal2;
+      external = supplyExternal;
+
+      examCategory = "Supply";
+    }
 
     // ============================================================
     // MISSING MARKS

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'semester_change_page.dart';
+import 'result_release_page.dart';
 import 'semester_change_page.dart';
 import 'result_release_page.dart';
 

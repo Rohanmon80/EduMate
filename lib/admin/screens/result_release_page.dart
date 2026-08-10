@@ -427,7 +427,14 @@ class _ResultReleasePageState
 
                     final uploaded = uploadedStudentIds.length;
 
-                    final released = first["released"] == true;
+                    final allReleased = list.isNotEmpty &&
+                        list.every((doc) {
+                          final data =
+                          doc.data() as Map<String, dynamic>;
+                          return data["released"] == true;
+                        });
+
+                    final released = allReleased;
 
                     return Card(
 
