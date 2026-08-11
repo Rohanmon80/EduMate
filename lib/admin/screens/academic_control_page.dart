@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'semester_change_page.dart';
 import 'result_release_page.dart';
-import 'semester_change_page.dart';
-import 'result_release_page.dart';
+
 
 class AcademicControlPage extends StatelessWidget {
   const AcademicControlPage({super.key});
@@ -53,8 +52,8 @@ class AcademicControlPage extends StatelessWidget {
             const SizedBox(height: 30),
 
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Expanded(
                   child: _controlCard(
                     context,
@@ -68,15 +67,14 @@ class AcademicControlPage extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                          const SemesterChangePage(),
+                          builder: (_) => const SemesterChangePage(),
                         ),
                       );
                     },
                   ),
                 ),
 
-                const SizedBox(width: 18),
+                const SizedBox(width: 12),
 
                 Expanded(
                   child: _controlCard(
@@ -91,14 +89,12 @@ class AcademicControlPage extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                          const ResultReleasePage(),
+                          builder: (_) => const ResultReleasePage(),
                         ),
                       );
                     },
                   ),
                 ),
-
               ],
             ),
           ],
@@ -127,7 +123,7 @@ class AcademicControlPage extends StatelessWidget {
       ),
 
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(14),
 
         child: Column(
           crossAxisAlignment:
@@ -136,7 +132,7 @@ class AcademicControlPage extends StatelessWidget {
           children: [
 
             CircleAvatar(
-              radius: 30,
+              radius: 24,
               child: Icon(
                 icon,
                 size: 30,
