@@ -1,7 +1,9 @@
 import 'dart:ui';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../main.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -12,147 +14,277 @@ class SettingsPage extends StatefulWidget {
       _SettingsPageState();
 }
 
-class _SettingsPageState
-    extends State<SettingsPage> {
-
+class _SettingsPageState extends State<SettingsPage> {
   bool notifications = true;
-
   bool biometric = false;
-
   bool autoLogin = true;
 
   String role = "";
+  String selectedLanguage = "English";
 
-  String selectedLanguage =
-      "English";
+  bool isLoading = true;
 
   @override
-
-  void initState(){
-
+  void initState() {
     super.initState();
-
-    loadBiometric();
+    loadSettings();
   }
 
-  Future<void>
-  loadBiometric()
+  // ============================================================
+  // LOAD SETTINGS
+  // ============================================================
 
-  async {
+  Future<void> loadSettings() async {
+    final prefs =
+    await SharedPreferences.getInstance();
 
-    SharedPreferences prefs =
+    final savedRole =
+        prefs.getString("userRole") ?? "";
 
-    await SharedPreferences
-        .getInstance();
+    final savedAutoLogin =
+        prefs.getBool("autoLogin") ?? true;
 
-    role =
+    bool biometricEnabled = false;
 
-        prefs.getString(
-          "userRole",
-        )
+    if (savedRole == "student") {
+      biometricEnabled =
+          prefs.getBool("studentBiometric") ?? false;
+    } else if (savedRole == "teacher") {
+      biometricEnabled =
+          prefs.getBool("teacherBiometric") ?? false;
+    } else if (savedRole == "admin") {
+      biometricEnabled =
+          prefs.getBool("adminBiometric") ?? false;
+    }
 
-            ??
+    if (!mounted) return;
 
-            "";
-
-    autoLogin =
-
-        prefs.getBool(
-          "autoLogin",
-        )
-
-            ??
-
-            true;
-
-    setState((){
-
-      if(
-      role ==
-          "student"
-      ){
-
-        biometric =
-
-            prefs.getBool(
-              "studentBiometric",
-            )
-
-                ??
-
-                false;
-      }
-
-      else if(
-      role ==
-          "teacher"
-      ){
-
-        biometric =
-
-            prefs.getBool(
-              "teacherBiometric",
-            )
-
-                ??
-
-                false;
-      }
-
-      else if(
-      role ==
-          "admin"
-      ){
-
-        biometric =
-
-            prefs.getBool(
-              "adminBiometric",
-            )
-
-                ??
-
-                false;
-      }
+    setState(() {
+      role = savedRole;
+      autoLogin = savedAutoLogin;
+      biometric = biometricEnabled;
+      isLoading = false;
     });
   }
 
+  // ============================================================
+  // GET CURRENT BIOMETRIC KEY
+  // ============================================================
+
+  String? get biometricKey {
+    switch (role) {
+      case "student":
+        return "studentBiometric";
+
+      case "teacher":
+        return "teacherBiometric";
+
+      case "admin":
+        return "adminBiometric";
+
+      default:
+        return null;
+    }
+  }
+
+  // ============================================================
+  // CHANGE BIOMETRIC
+  // ============================================================
+
+  Future<void> changeBiometric(bool value) async {
+    final prefs =
+    await SharedPreferences.getInstance();
+
+    final key = biometricKey;
+
+    if (key == null) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "User role could not be identified.",
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // ENABLE
+    // ----------------------------------------------------------
+
+    if (value) {
+      await prefs.setBool(
+        key,
+        true,
+      );
+
+      // Mark biometric setup as configured.
+      if (role == "student") {
+        await prefs.setBool(
+          "studentBiometricConfigured",
+          true,
+        );
+      } else if (role == "teacher") {
+        await prefs.setBool(
+          "teacherBiometricConfigured",
+          true,
+        );
+      } else if (role == "admin") {
+        await prefs.setBool(
+          "adminBiometricConfigured",
+          true,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        biometric = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Biometric login enabled.",
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // DISABLE
+    // ----------------------------------------------------------
+
+    await prefs.setBool(
+      key,
+      false,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      biometric = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          "Biometric login disabled.",
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // CHANGE AUTO LOGIN
+  // ============================================================
+
+  Future<void> changeAutoLogin(bool value) async {
+    final prefs =
+    await SharedPreferences.getInstance();
+
+    await prefs.setBool(
+      "autoLogin",
+      value,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      autoLogin = value;
+    });
+
+    /*
+     IMPORTANT:
+     Do NOT remove studentBiometric,
+     teacherBiometric or adminBiometric here.
+
+     Auto Login and Biometric Login are separate settings.
+    */
+
+    if (!value) {
+      await prefs.remove("savedEmail");
+    }
+  }
+
+  // ============================================================
+  // LOGOUT
+  // ============================================================
+
+  Future<void> logout() async {
+    await FirebaseAuth.instance.signOut();
+
+    final prefs =
+    await SharedPreferences.getInstance();
+
+    /*
+     Do not remove biometric settings here.
+
+     The user selected whether biometric login is enabled
+     in Settings. Keeping the setting allows it to work
+     again after the next normal login.
+    */
+
+    await prefs.remove("savedEmail");
+    await prefs.remove("savedPassword");
+    await prefs.remove("userRole");
+
+    if (!mounted) return;
+
+    Navigator.popUntil(
+      context,
+          (route) => route.isFirst,
+    );
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
-
     final bool isDark =
         Theme.of(context).brightness ==
             Brightness.dark;
 
+    if (isLoading) {
+      return Scaffold(
+        backgroundColor: isDark
+            ? const Color(0xFF081120)
+            : const Color(0xFFF4F8FC),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
+      backgroundColor: isDark
+          ? const Color(0xFF081120)
+          : const Color(0xFFF4F8FC),
 
       appBar: AppBar(
-
         backgroundColor: Colors.transparent,
-
         elevation: 0,
 
         leading: IconButton(
-
-          icon:
-          const Icon(Icons.arrow_back),
+          icon: const Icon(
+            Icons.arrow_back,
+          ),
 
           onPressed: () {
-
             Navigator.pop(context);
           },
         ),
       ),
 
-      backgroundColor:
-      isDark
-          ? const Color(0xFF081120)
-          : const Color(0xFFF4F8FC),
-
       body: SafeArea(
-
         child: SingleChildScrollView(
-
           padding:
           const EdgeInsets.all(20),
 
@@ -162,7 +294,10 @@ class _SettingsPageState
 
             children: [
 
-              /// TITLE
+              // ==================================================
+              // TITLE
+              // ==================================================
+
               Row(
                 mainAxisAlignment:
                 MainAxisAlignment.spaceBetween,
@@ -183,23 +318,29 @@ class _SettingsPageState
                           fontWeight:
                           FontWeight.bold,
 
-                          color:
-                          isDark
+                          color: isDark
                               ? Colors.white
                               : Colors.black,
                         ),
                       ),
 
-                      const SizedBox(height: 6),
+                      const SizedBox(
+                        height: 6,
+                      ),
 
                       Text(
-                        "Manage app preferences",
+                        role == "student"
+                            ? "Student preferences"
+                            : role == "teacher"
+                            ? "Faculty preferences"
+                            : role == "admin"
+                            ? "Admin preferences"
+                            : "Manage app preferences",
 
                         style: TextStyle(
                           fontSize: 16,
 
-                          color:
-                          isDark
+                          color: isDark
                               ? Colors.white70
                               : Colors.grey,
                         ),
@@ -207,24 +348,20 @@ class _SettingsPageState
                     ],
                   ),
 
+                  // Theme button
                   GestureDetector(
-
                     onTap: () {
-
                       EduMateApp.of(context)
                           ?.toggleTheme();
                     },
 
                     child: Container(
-
                       width: 52,
                       height: 52,
 
                       decoration:
                       BoxDecoration(
-
-                        color:
-                        isDark
+                        color: isDark
                             ? Colors.white
                             .withOpacity(0.08)
                             : Colors.white,
@@ -236,13 +373,11 @@ class _SettingsPageState
                       ),
 
                       child: Icon(
-
                         isDark
                             ? Icons.light_mode
                             : Icons.dark_mode,
 
-                        color:
-                        isDark
+                        color: isDark
                             ? Colors.white
                             : Colors.black,
                       ),
@@ -251,185 +386,123 @@ class _SettingsPageState
                 ],
               ),
 
-              const SizedBox(height: 35),
+              const SizedBox(
+                height: 35,
+              ),
 
-              /// NOTIFICATIONS
+              // ==================================================
+              // NOTIFICATIONS
+              // ==================================================
+
               settingTile(
                 isDark: isDark,
+
                 title: "Notifications",
+
                 subtitle:
                 "Enable app alerts",
+
                 icon:
                 Icons.notifications,
+
                 value: notifications,
 
                 onChanged: (value) {
-
                   setState(() {
-
                     notifications =
                         value;
                   });
                 },
               ),
 
-              const SizedBox(height: 20),
-
-              /// BIOMETRIC
-              settingTile(
-                isDark: isDark,
-                title:
-                "Biometric Login",
-                subtitle:
-                "Fingerprint unlock",
-                icon:
-                Icons.fingerprint,
-                value: biometric,
-
-                onChanged: (value)
-
-                async {
-
-                  SharedPreferences prefs =
-
-                  await SharedPreferences
-                      .getInstance();
-
-                  if(
-                  !autoLogin &&
-                      value
-                  ){
-
-                    ScaffoldMessenger.of(
-                      context,
-                    )
-
-                        .showSnackBar(
-
-                      const SnackBar(
-
-                        content:
-                        Text(
-                          "Enable Auto Login first",
-                        ),
-                      ),
-                    );
-
-                    return;
-                  }
-
-                  setState((){
-
-                    biometric=value;
-                  });
-
-                  if(
-                  role ==
-                      "student"
-                  ){
-
-                    await prefs.setBool(
-
-                      "studentBiometric",
-
-                      value,
-                    );
-                  }
-
-                  else if(
-                  role ==
-                      "teacher"
-                  ){
-
-                    await prefs.setBool(
-
-                      "teacherBiometric",
-
-                      value,
-                    );
-                  }
-
-                  else if(
-                  role ==
-                      "admin"
-                  ){
-
-                    await prefs.setBool(
-
-                      "adminBiometric",
-
-                      value,
-                    );
-                  }
-                },
+              const SizedBox(
+                height: 20,
               ),
 
-              const SizedBox(height: 20),
+              // ==================================================
+              // BIOMETRIC
+              // ==================================================
 
-              /// AUTO LOGIN
               settingTile(
                 isDark: isDark,
+
+                title: "Biometric Login",
+
+                subtitle: biometric
+                    ? "Fingerprint login is enabled"
+                    : "Fingerprint login is disabled",
+
+                icon:
+                Icons.fingerprint,
+
+                value: biometric,
+
+                onChanged:
+                changeBiometric,
+              ),
+
+              const SizedBox(
+                height: 10,
+              ),
+
+              Padding(
+                padding:
+                const EdgeInsets.symmetric(
+                  horizontal: 8,
+                ),
+
+                child: Text(
+                  role == "student"
+                      ? "Applies to Student login"
+                      : role == "teacher"
+                      ? "Applies to Teacher login"
+                      : role == "admin"
+                      ? "Applies to Admin login"
+                      : "Biometric login",
+
+                  style: TextStyle(
+                    fontSize: 12,
+
+                    color: isDark
+                        ? Colors.white54
+                        : Colors.grey,
+                  ),
+                ),
+              ),
+
+              const SizedBox(
+                height: 20,
+              ),
+
+              // ==================================================
+              // AUTO LOGIN
+              // ==================================================
+
+              settingTile(
+                isDark: isDark,
+
                 title: "Auto Login",
+
                 subtitle:
                 "Remember login session",
+
                 icon: Icons.login,
+
                 value: autoLogin,
 
                 onChanged:
-                    (value) async {
-
-                  SharedPreferences prefs =
-
-                  await SharedPreferences
-                      .getInstance();
-
-                  setState(() {
-
-                    autoLogin = value;
-                  });
-
-                  await prefs.setBool(
-                    "autoLogin",
-                    value,
-                  );
-
-                  if(
-                  !value
-                  ){
-
-                    await prefs.remove(
-                      "savedEmail",
-                    );
-
-                    await prefs.remove(
-                      "savedPassword",
-                    );
-
-                    await prefs.remove(
-                      "studentBiometric",
-                    );
-
-                    await prefs.remove(
-                      "teacherBiometric",
-                    );
-
-                    await prefs.remove(
-                      "adminBiometric",
-                    );
-
-                    setState((){
-
-                      biometric=false;
-                    });
-                  }
-                },
+                changeAutoLogin,
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(
+                height: 20,
+              ),
 
-              /// LANGUAGE
+              // ==================================================
+              // LANGUAGE
+              // ==================================================
+
               glassCard(
-
                 isDark: isDark,
 
                 child: Column(
@@ -439,18 +512,15 @@ class _SettingsPageState
                   children: [
 
                     Row(
-
                       children: [
 
                         Container(
-
                           width: 60,
                           height: 60,
 
                           decoration:
                           BoxDecoration(
-                            color:
-                            Colors.blue
+                            color: Colors.blue
                                 .withOpacity(
                               0.15,
                             ),
@@ -461,13 +531,17 @@ class _SettingsPageState
                             ),
                           ),
 
-                          child: const Icon(
+                          child:
+                          const Icon(
                             Icons.language,
-                            color: Colors.blue,
+                            color:
+                            Colors.blue,
                           ),
                         ),
 
-                        const SizedBox(width: 18),
+                        const SizedBox(
+                          width: 18,
+                        ),
 
                         Expanded(
                           child: Column(
@@ -484,23 +558,22 @@ class _SettingsPageState
                                   fontWeight:
                                   FontWeight.bold,
 
-                                  color:
-                                  isDark
+                                  color: isDark
                                       ? Colors.white
                                       : Colors.black,
                                 ),
                               ),
 
-                              const SizedBox(height: 6),
+                              const SizedBox(
+                                height: 6,
+                              ),
 
                               Text(
                                 "Choose app language",
 
                                 style: TextStyle(
-                                  color:
-                                  isDark
-                                      ? Colors
-                                      .white70
+                                  color: isDark
+                                      ? Colors.white70
                                       : Colors.grey,
                                 ),
                               ),
@@ -510,9 +583,12 @@ class _SettingsPageState
                       ],
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(
+                      height: 20,
+                    ),
 
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
 
                       value:
                       selectedLanguage,
@@ -524,41 +600,44 @@ class _SettingsPageState
                       )
                           : Colors.white,
 
-                      items: [
-
+                      items: const [
                         "English",
                         "Hindi",
                         "Bengali",
                         "Tamil",
                         "Telugu",
+                      ].map(
+                            (language) {
+                          return DropdownMenuItem<
+                              String>(
+                            value: language,
 
-                      ].map((language) {
-
-                        return DropdownMenuItem(
-
-                          value: language,
-
-                          child:
-                          Text(language),
-                        );
-                      }).toList(),
+                            child: Text(
+                              language,
+                              overflow:
+                              TextOverflow
+                                  .ellipsis,
+                            ),
+                          );
+                        },
+                      ).toList(),
 
                       onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
 
                         setState(() {
-
                           selectedLanguage =
-                          value!;
+                              value;
                         });
                       },
 
                       decoration:
                       InputDecoration(
-
                         filled: true,
 
-                        fillColor:
-                        isDark
+                        fillColor: isDark
                             ? Colors.white
                             .withOpacity(
                           0.08,
@@ -581,68 +660,28 @@ class _SettingsPageState
                 ),
               ),
 
-              const SizedBox(height: 35),
+              const SizedBox(
+                height: 35,
+              ),
 
-              /// LOGOUT BUTTON
+              // ==================================================
+              // LOGOUT
+              // ==================================================
+
               SizedBox(
+                width:
+                double.infinity,
 
-                width: double.infinity,
                 height: 60,
 
-                child: ElevatedButton(
-
-                  onPressed: () async {
-
-                    await FirebaseAuth
-                        .instance
-                        .signOut();
-
-                    SharedPreferences prefs =
-
-                    await SharedPreferences
-                        .getInstance();
-
-                    await prefs.remove(
-                      "savedEmail",
-                    );
-
-                    await prefs.remove(
-                      "savedPassword",
-                    );
-
-                    await prefs.remove(
-                      "userRole",
-                    );
-
-                    await prefs.remove(
-                      "studentBiometric",
-                    );
-
-                    await prefs.remove(
-                      "teacherBiometric",
-                    );
-
-                    await prefs.remove(
-                      "adminBiometric",
-                    );
-
-                    if(
-                    mounted
-                    ){
-
-                      Navigator.popUntil(
-
-                        context,
-
-                            (route) =>
-                        route.isFirst,
-                      );
-                    }
-                  },
+                child:
+                ElevatedButton(
+                  onPressed:
+                  logout,
 
                   style:
-                  ElevatedButton.styleFrom(
-
+                  ElevatedButton
+                      .styleFrom(
                     backgroundColor:
                     Colors.redAccent,
 
@@ -655,20 +694,25 @@ class _SettingsPageState
                     ),
                   ),
 
-                  child: const Text(
+                  child:
+                  const Text(
                     "Logout",
 
-                    style: TextStyle(
+                    style:
+                    TextStyle(
                       fontSize: 18,
                       fontWeight:
                       FontWeight.bold,
-                      color: Colors.white,
+                      color:
+                      Colors.white,
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(
+                height: 30,
+              ),
             ],
           ),
         ),
@@ -676,37 +720,39 @@ class _SettingsPageState
     );
   }
 
+  // ============================================================
+  // SETTING TILE
+  // ============================================================
+
   Widget settingTile({
     required bool isDark,
     required String title,
     required String subtitle,
     required IconData icon,
     required bool value,
-    required Function(bool)
-    onChanged,
+    required Function(bool) onChanged,
   }) {
-
     return glassCard(
-
       isDark: isDark,
 
       child: Row(
-
         children: [
 
           Container(
-
             width: 60,
             height: 60,
 
-            decoration: BoxDecoration(
-              color:
-              Colors.blue.withOpacity(
+            decoration:
+            BoxDecoration(
+              color: Colors.blue
+                  .withOpacity(
                 0.15,
               ),
 
               borderRadius:
-              BorderRadius.circular(18),
+              BorderRadius.circular(
+                18,
+              ),
             ),
 
             child: Icon(
@@ -715,7 +761,9 @@ class _SettingsPageState
             ),
           ),
 
-          const SizedBox(width: 18),
+          const SizedBox(
+            width: 18,
+          ),
 
           Expanded(
             child: Column(
@@ -732,21 +780,21 @@ class _SettingsPageState
                     fontWeight:
                     FontWeight.bold,
 
-                    color:
-                    isDark
+                    color: isDark
                         ? Colors.white
                         : Colors.black,
                   ),
                 ),
 
-                const SizedBox(height: 6),
+                const SizedBox(
+                  height: 6,
+                ),
 
                 Text(
                   subtitle,
 
                   style: TextStyle(
-                    color:
-                    isDark
+                    color: isDark
                         ? Colors.white70
                         : Colors.grey,
                   ),
@@ -764,44 +812,50 @@ class _SettingsPageState
     );
   }
 
+  // ============================================================
+  // GLASS CARD
+  // ============================================================
+
   Widget glassCard({
     required bool isDark,
     required Widget child,
   }) {
-
     return ClipRRect(
-
       borderRadius:
-      BorderRadius.circular(28),
+      BorderRadius.circular(
+        28,
+      ),
 
       child: BackdropFilter(
-
         filter: ImageFilter.blur(
           sigmaX: 20,
           sigmaY: 20,
         ),
 
         child: Container(
-
           padding:
-          const EdgeInsets.all(20),
+          const EdgeInsets.all(
+            20,
+          ),
 
-          decoration: BoxDecoration(
-
-            color:
-            isDark
+          decoration:
+          BoxDecoration(
+            color: isDark
                 ? Colors.white
                 .withOpacity(0.08)
                 : Colors.white
                 .withOpacity(0.35),
 
             borderRadius:
-            BorderRadius.circular(28),
+            BorderRadius.circular(
+              28,
+            ),
 
             border: Border.all(
-              color:
-              Colors.white
-                  .withOpacity(0.2),
+              color: Colors.white
+                  .withOpacity(
+                0.2,
+              ),
             ),
           ),
 

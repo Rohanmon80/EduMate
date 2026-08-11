@@ -1,66 +1,50 @@
 import 'package:flutter/material.dart';
-import 'admin_dashboard_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../main.dart';
 import 'admin_signup_page.dart';
 import 'admin_main_navigation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:local_auth/local_auth.dart';
-
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AdminLoginPage extends StatefulWidget {
   const AdminLoginPage({super.key});
 
-
-
   @override
-  State<AdminLoginPage> createState() =>
-      _AdminLoginPageState();
+  State<AdminLoginPage> createState() => _AdminLoginPageState();
 }
 
-class _AdminLoginPageState
-    extends State<AdminLoginPage> {
+class _AdminLoginPageState extends State<AdminLoginPage> {
+  bool obscurePassword = true;
 
-  final LocalAuthentication
-  auth =
-  LocalAuthentication();
+  final TextEditingController adminIdController =
+  TextEditingController();
 
-  Future<void>
-  loginWithBiometric()
+  final TextEditingController passwordController =
+  TextEditingController();
 
-  async {
+  final LocalAuthentication auth = LocalAuthentication();
 
+  // ============================================================
+  // BIOMETRIC LOGIN
+  // ============================================================
+
+  Future<void> loginWithBiometric() async {
     try {
+      final SharedPreferences prefs =
+      await SharedPreferences.getInstance();
 
-      SharedPreferences prefs =
+      final bool biometricEnabled =
+          prefs.getBool("adminBiometric") ?? false;
 
-      await SharedPreferences
-          .getInstance();
+      if (!biometricEnabled) {
+        if (!mounted) return;
 
-      bool allowed =
-
-          prefs.getBool(
-            "adminBiometric",
-          )
-
-              ??
-
-              false;
-
-      if(!allowed){
-
-        ScaffoldMessenger.of(
-          context,
-        )
-
-            .showSnackBar(
-
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-
-            content:
-            Text(
-              "Biometric not enabled",
+            content: Text(
+              "Biometric login is disabled. Enable it from Settings.",
             ),
           ),
         );
@@ -68,181 +52,447 @@ class _AdminLoginPageState
         return;
       }
 
-      bool authenticated =
+      final bool canCheckBiometrics =
+      await auth.canCheckBiometrics;
 
+      final bool isDeviceSupported =
+      await auth.isDeviceSupported();
+
+      if (!canCheckBiometrics &&
+          !isDeviceSupported) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Biometric authentication is not available on this device.",
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      final bool authenticated =
       await auth.authenticate(
-
         localizedReason:
-        "Admin Login",
+        "Authenticate to login as Admin",
 
-        options:
-
-        const AuthenticationOptions(
-
-          biometricOnly:false,
-
-          stickyAuth:true,
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
         ),
       );
 
-      if(
-      authenticated &&
-          mounted
-      ){
-
-        String? email =
-
-        prefs.getString(
-          "adminEmail",
-        );
-
-        String? password =
-
-        prefs.getString(
-          "savedPassword",
-        );
-
-        if(
-        email == null ||
-            password == null
-        ){
-
-          ScaffoldMessenger.of(
-            context,
-          )
-
-              .showSnackBar(
-
-            const SnackBar(
-
-              content:
-              Text(
-                "Login normally first",
-              ),
-            ),
-          );
-
-          return;
-        }
-
-        await FirebaseAuth
-            .instance
-
-            .signInWithEmailAndPassword(
-
-          email:email,
-
-          password:password,
-        );
-
-        Navigator.pushReplacement(
-
-          context,
-
-          MaterialPageRoute(
-
-            builder:
-                (_)=>
-
-            const AdminMainNavigation(),
-          ),
-        );
+      if (!authenticated || !mounted) {
+        return;
       }
 
-    }
+      final String? email =
+      prefs.getString("adminEmail");
 
-    catch(e){
+      final String? password =
+      prefs.getString("savedPassword");
 
-      ScaffoldMessenger.of(
+      if (email == null ||
+          password == null ||
+          email.isEmpty ||
+          password.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Please login normally once before using biometric login.",
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      final UserCredential user =
+      await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final DocumentSnapshot adminDoc =
+      await FirebaseFirestore.instance
+          .collection("admins")
+          .doc(user.user!.uid)
+          .get();
+
+      if (!adminDoc.exists ||
+          adminDoc["role"] != "admin") {
+        await FirebaseAuth.instance.signOut();
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "This account is not an admin account.",
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      await prefs.setString(
+        "adminUid",
+        user.user!.uid,
+      );
+
+      await prefs.setString(
+        "userRole",
+        "admin",
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
         context,
-      )
+        MaterialPageRoute(
+          builder: (_) =>
+          const AdminMainNavigation(),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
 
-          .showSnackBar(
-
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-
-          content:
-          Text(
-            e.toString(),
+          content: Text(
+            "Biometric login failed: $e",
           ),
         ),
       );
     }
   }
 
-  bool obscurePassword = true;
-  final TextEditingController
-  adminIdController =
-  TextEditingController();
+  // ============================================================
+  // NORMAL ADMIN LOGIN
+  // ============================================================
 
-  final TextEditingController
-  passwordController =
-  TextEditingController();
+  Future<void> loginNormally() async {
+    final email =
+    adminIdController.text.trim();
+
+    final password =
+    passwordController.text.trim();
+
+    if (email.isEmpty ||
+        password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Please enter Admin ID and password.",
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    try {
+      final UserCredential user =
+      await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final String uid =
+          user.user!.uid;
+
+      final DocumentSnapshot adminDoc =
+      await FirebaseFirestore.instance
+          .collection("admins")
+          .doc(uid)
+          .get();
+
+      if (!adminDoc.exists ||
+          adminDoc["role"] != "admin") {
+        await FirebaseAuth.instance.signOut();
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "This account is not an admin account.",
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      final SharedPreferences prefs =
+      await SharedPreferences.getInstance();
+
+      // Save login information for biometric login.
+      await prefs.setString(
+        "adminUid",
+        uid,
+      );
+
+      await prefs.setString(
+        "adminEmail",
+        user.user!.email ?? email,
+      );
+
+      await prefs.setString(
+        "savedPassword",
+        password,
+      );
+
+      await prefs.setString(
+        "userRole",
+        "admin",
+      );
+
+      // --------------------------------------------------------
+      // Check whether biometric setting already exists.
+      // --------------------------------------------------------
+
+      final bool biometricConfigured =
+      prefs.containsKey(
+        "adminBiometric",
+      );
+
+      if (!biometricConfigured) {
+        await _showBiometricSetupDialog(
+          prefs,
+        );
+
+        return;
+      }
+
+      // Already configured.
+      // Go directly to Admin dashboard.
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+          const AdminMainNavigation(),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Login failed: $e",
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // BIOMETRIC SETUP DIALOG
+  // ============================================================
+
+  Future<void> _showBiometricSetupDialog(
+      SharedPreferences prefs,
+      ) async {
+    if (!mounted) return;
+
+    final bool? enable =
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text(
+            "Enable Biometric Login?",
+          ),
+
+          content: const Text(
+            "You can use fingerprint or device authentication "
+                "for faster login next time.",
+          ),
+
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  false,
+                );
+              },
+              child: const Text(
+                "Not Now",
+              ),
+            ),
+
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  final bool available =
+                      await auth.canCheckBiometrics ||
+                          await auth.isDeviceSupported();
+
+                  if (!available) {
+                    if (!dialogContext.mounted) {
+                      return;
+                    }
+
+                    ScaffoldMessenger.of(
+                      dialogContext,
+                    ).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "Biometric authentication is not available.",
+                        ),
+                      ),
+                    );
+
+                    return;
+                  }
+
+                  final bool authenticated =
+                  await auth.authenticate(
+                    localizedReason:
+                    "Confirm biometric login",
+
+                    options:
+                    const AuthenticationOptions(
+                      biometricOnly: false,
+                      stickyAuth: true,
+                    ),
+                  );
+
+                  if (!authenticated) {
+                    return;
+                  }
+
+                  await prefs.setBool(
+                    "adminBiometric",
+                    true,
+                  );
+
+                  if (!dialogContext.mounted) {
+                    return;
+                  }
+
+                  Navigator.pop(
+                    dialogContext,
+                    true,
+                  );
+                } catch (e) {
+                  if (!dialogContext.mounted) {
+                    return;
+                  }
+
+                  ScaffoldMessenger.of(
+                    dialogContext,
+                  ).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        "Could not enable biometric: $e",
+                      ),
+                    ),
+                  );
+                }
+              },
+
+              child: const Text(
+                "Enable",
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+        const AdminMainNavigation(),
+      ),
+    );
+  }
 
   @override
-
-  void dispose(){
-
+  void dispose() {
     adminIdController.dispose();
-
     passwordController.dispose();
 
     super.dispose();
   }
 
+  // ============================================================
+  // UI
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
-
     final bool isDark =
         Theme.of(context).brightness ==
             Brightness.dark;
 
     return Scaffold(
-
-
-      backgroundColor:
-      isDark
+      backgroundColor: isDark
           ? const Color(0xFF0B1736)
           : const Color(0xFFF4F8FC),
 
       body: SafeArea(
-
         child: Stack(
-
           children: [
+            // ==================================================
+            // TOP BLUE SECTION
+            // ==================================================
 
-            /// TOP BLUE BACKGROUND
             Container(
               height: 320,
 
-              decoration: const BoxDecoration(
-
-                gradient: LinearGradient(
+              decoration:
+              const BoxDecoration(
+                gradient:
+                LinearGradient(
                   colors: [
                     Color(0xFF005BEA),
                     Color(0xFF00C6FB),
                   ],
                 ),
 
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(45),
-                  bottomRight: Radius.circular(45),
+                borderRadius:
+                BorderRadius.only(
+                  bottomLeft:
+                  Radius.circular(45),
+                  bottomRight:
+                  Radius.circular(45),
                 ),
               ),
             ),
 
-            /// CONTENT
+            // ==================================================
+            // CONTENT
+            // ==================================================
+
             SingleChildScrollView(
-
               child: Column(
-
                 children: [
+                  const SizedBox(
+                    height: 18,
+                  ),
 
-                  const SizedBox(height: 18),
+                  // --------------------------------------------
+                  // TOP BUTTONS
+                  // --------------------------------------------
 
-                  /// TOP BUTTONS
                   Padding(
-                    padding: const EdgeInsets.symmetric(
+                    padding:
+                    const EdgeInsets.symmetric(
                       horizontal: 20,
                     ),
 
@@ -251,45 +501,52 @@ class _AdminLoginPageState
                       MainAxisAlignment.spaceBetween,
 
                       children: [
-
                         GestureDetector(
-
                           onTap: () {
-
-                            Navigator.pop(context);
+                            Navigator.pop(
+                              context,
+                            );
                           },
 
-                          child: CircleAvatar(
+                          child:
+                          CircleAvatar(
                             backgroundColor:
-                            Colors.white.withOpacity(0.15),
+                            Colors.white
+                                .withOpacity(
+                              0.15,
+                            ),
 
-                            child: const Icon(
+                            child:
+                            const Icon(
                               Icons.arrow_back,
-                              color: Colors.white,
+                              color:
+                              Colors.white,
                             ),
                           ),
                         ),
 
                         CircleAvatar(
                           backgroundColor:
-                          Colors.white.withOpacity(0.15),
+                          Colors.white
+                              .withOpacity(
+                            0.15,
+                          ),
 
-                          child: IconButton(
-
+                          child:
+                          IconButton(
                             onPressed: () {
-                              Navigator.pop(context);
-
-                              EduMateApp.of(context)
-                                  ?.toggleTheme();
+                              EduMateApp.of(
+                                context,
+                              )?.toggleTheme();
                             },
 
                             icon: Icon(
-
                               isDark
                                   ? Icons.light_mode
                                   : Icons.dark_mode,
 
-                              color: Colors.white,
+                              color:
+                              Colors.white,
                             ),
                           ),
                         ),
@@ -297,11 +554,17 @@ class _AdminLoginPageState
                     ),
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(
+                    height: 30,
+                  ),
 
-                  /// TITLE
+                  // --------------------------------------------
+                  // TITLE
+                  // --------------------------------------------
+
                   const Padding(
-                    padding: EdgeInsets.symmetric(
+                    padding:
+                    EdgeInsets.symmetric(
                       horizontal: 25,
                     ),
 
@@ -310,24 +573,30 @@ class _AdminLoginPageState
                       CrossAxisAlignment.start,
 
                       children: [
-
                         Text(
                           "Admin Login",
 
-                          style: TextStyle(
-                            color: Colors.white,
+                          style:
+                          TextStyle(
+                            color:
+                            Colors.white,
                             fontSize: 42,
-                            fontWeight: FontWeight.bold,
+                            fontWeight:
+                            FontWeight.bold,
                           ),
                         ),
 
-                        SizedBox(height: 8),
+                        SizedBox(
+                          height: 8,
+                        ),
 
                         Text(
                           "Welcome back, Admin",
 
-                          style: TextStyle(
-                            color: Colors.white70,
+                          style:
+                          TextStyle(
+                            color:
+                            Colors.white70,
                             fontSize: 20,
                           ),
                         ),
@@ -335,124 +604,145 @@ class _AdminLoginPageState
                     ),
                   ),
 
-                  const SizedBox(height: 80),
+                  const SizedBox(
+                    height: 80,
+                  ),
 
-                  /// LOGIN CARD
+                  // ==================================================
+                  // LOGIN CARD
+                  // ==================================================
+
                   Container(
-
-                    margin: const EdgeInsets.symmetric(
+                    margin:
+                    const EdgeInsets.symmetric(
                       horizontal: 18,
                     ),
 
-                    padding: const EdgeInsets.all(25),
+                    padding:
+                    const EdgeInsets.all(
+                      25,
+                    ),
 
-                    decoration: BoxDecoration(
-
-                      color:
-                      isDark
-                          ? const Color(0xFF16213E)
-                          : const Color(0xFFEFF7FD),
+                    decoration:
+                    BoxDecoration(
+                      color: isDark
+                          ? const Color(
+                        0xFF16213E,
+                      )
+                          : const Color(
+                        0xFFEFF7FD,
+                      ),
 
                       borderRadius:
-                      BorderRadius.circular(38),
-
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                          Colors.black.withOpacity(0.08),
-
-                          blurRadius: 25,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+                      BorderRadius.circular(
+                        38,
+                      ),
                     ),
 
                     child: Column(
-
                       children: [
+                        // --------------------------------------------
+                        // LOGO
+                        // --------------------------------------------
 
-                        /// COLLEGE LOGO
                         CircleAvatar(
                           radius: 42,
 
-                          backgroundColor: Colors.white,
+                          backgroundColor:
+                          Colors.white,
 
-                          child: ClipRRect(
+                          child:
+                          ClipRRect(
                             borderRadius:
-                            BorderRadius.circular(40),
+                            BorderRadius
+                                .circular(
+                              40,
+                            ),
 
-                            child: Image.asset(
+                            child:
+                            Image.asset(
                               "assets/images/college_logo.png",
-
-                              fit: BoxFit.cover,
 
                               width: 75,
                               height: 75,
+
+                              fit: BoxFit.cover,
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 28),
+                        const SizedBox(
+                          height: 28,
+                        ),
 
-                        /// ROLL NUMBER
+                        // --------------------------------------------
+                        // ADMIN ID
+                        // --------------------------------------------
+
                         Align(
-                          alignment: Alignment.centerLeft,
+                          alignment:
+                          Alignment.centerLeft,
 
                           child: Text(
-                            "Admin ID",
+                            "Admin Email",
 
-                            style: TextStyle(
+                            style:
+                            TextStyle(
                               fontSize: 18,
-                              fontWeight: FontWeight.w600,
+                              fontWeight:
+                              FontWeight.w600,
 
-                              color:
-                              isDark
+                              color: isDark
                                   ? Colors.white
                                   : Colors.black,
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 12),
+                        const SizedBox(
+                          height: 12,
+                        ),
 
                         Container(
-
-                          decoration: BoxDecoration(
-
-                            color:
-                            isDark
-                                ? const Color(0xFF1E2A47)
+                          decoration:
+                          BoxDecoration(
+                            color: isDark
+                                ? const Color(
+                              0xFF1E2A47,
+                            )
                                 : Colors.white,
 
                             borderRadius:
-                            BorderRadius.circular(22),
-
-                            border: Border.all(
-                              color: Colors.grey.shade300,
+                            BorderRadius
+                                .circular(
+                              22,
                             ),
                           ),
 
-                          child: TextField(
-
+                          child:
+                          TextField(
                             controller:
                             adminIdController,
 
+                            keyboardType:
+                            TextInputType
+                                .emailAddress,
+
                             style: TextStyle(
-                              color:
-                              isDark
+                              color: isDark
                                   ? Colors.white
                                   : Colors.black,
                             ),
 
                             decoration:
                             const InputDecoration(
-
                               hintText:
                               "admin@gmail.com",
 
                               prefixIcon:
                               Icon(
-                                Icons.mail_outline,
+                                Icons
+                                    .mail_outline,
                                 color:
                                 Colors.blue,
                               ),
@@ -461,474 +751,183 @@ class _AdminLoginPageState
                               InputBorder.none,
 
                               contentPadding:
-                              EdgeInsets.symmetric(
-                                vertical:22,
+                              EdgeInsets
+                                  .symmetric(
+                                vertical: 20,
                               ),
                             ),
                           ),
                         ),
 
+                        const SizedBox(
+                          height: 28,
+                        ),
 
+                        // --------------------------------------------
+                        // PASSWORD
+                        // --------------------------------------------
 
+                        Align(
+                          alignment:
+                          Alignment.centerLeft,
 
+                          child: Text(
+                            "Password",
 
+                            style:
+                            TextStyle(
+                              fontSize: 18,
+                              fontWeight:
+                              FontWeight.w600,
 
-                          /// PASSWORD
-                          Align(
+                              color: isDark
+                                  ? Colors.white
+                                  : Colors.black,
+                            ),
+                          ),
+                        ),
 
-                            alignment:
-                            Alignment.centerLeft,
+                        const SizedBox(
+                          height: 12,
+                        ),
 
-                            child: Text(
+                        Container(
+                          decoration:
+                          BoxDecoration(
+                            color: isDark
+                                ? const Color(
+                              0xFF1E2A47,
+                            )
+                                : Colors.white,
 
-                              "Password",
-
-                              style: TextStyle(
-
-                                fontSize: 18,
-
-                                fontWeight:
-                                FontWeight.w600,
-
-                                color:
-                                isDark
-                                    ? Colors.white
-                                    : Colors.black,
-                              ),
+                            borderRadius:
+                            BorderRadius
+                                .circular(
+                              22,
                             ),
                           ),
 
-                          const SizedBox(
-                            height: 12,
-                          ),
+                          child:
+                          TextField(
+                            controller:
+                            passwordController,
 
-                          Container(
+                            obscureText:
+                            obscurePassword,
+
+                            style: TextStyle(
+                              color: isDark
+                                  ? Colors.white
+                                  : Colors.black,
+                            ),
 
                             decoration:
-                            BoxDecoration(
+                            InputDecoration(
+                              hintText:
+                              "Password",
 
-                              color:
-                              isDark
-                                  ? const Color(
-                                0xFF1E2A47,
-                              )
-                                  : Colors.white,
+                              prefixIcon:
+                              const Icon(
+                                Icons.key,
+                                color:
+                                Colors.blue,
+                              ),
 
-                              borderRadius:
-                              BorderRadius.circular(
-                                22,
+                              suffixIcon:
+                              IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    obscurePassword =
+                                    !obscurePassword;
+                                  });
+                                },
+
+                                icon: Icon(
+                                  obscurePassword
+                                      ? Icons
+                                      .visibility_off
+                                      : Icons
+                                      .visibility,
+                                ),
                               ),
 
                               border:
-                              Border.all(
+                              InputBorder.none,
 
-                                color:
-                                Colors.grey.shade300,
-                              ),
-                            ),
-
-                            child: TextField(
-
-                              controller:
-                              passwordController,
-
-                              obscureText:
-                              obscurePassword,
-
-                              style: TextStyle(
-
-                                color:
-                                isDark
-                                    ? Colors.white
-                                    : Colors.black,
-                              ),
-
-                              decoration:
-                              InputDecoration(
-
-                                prefixIcon:
-                                const Icon(
-
-                                  Icons.key,
-
-                                  color:
-                                  Colors.blue,
-                                ),
-
-                                suffixIcon:
-                                IconButton(
-
-                                  onPressed: () {
-
-                                    setState(() {
-
-                                      obscurePassword =
-                                      !obscurePassword;
-                                    });
-                                  },
-
-                                  icon: Icon(
-
-                                    obscurePassword
-
-                                        ? Icons.visibility_off
-
-                                        : Icons.visibility,
-
-                                    color:
-                                    Colors.grey,
-                                  ),
-                                ),
-
-                                border:
-                                InputBorder.none,
-
-                                contentPadding:
-                                const EdgeInsets.symmetric(
-                                  vertical: 22,
-                                ),
+                              contentPadding:
+                              const EdgeInsets
+                                  .symmetric(
+                                vertical: 20,
                               ),
                             ),
                           ),
+                        ),
 
-                          const SizedBox(
-                            height: 35,
-                          ),
+                        const SizedBox(
+                          height: 35,
+                        ),
 
+                        // --------------------------------------------
+                        // SIGN IN
+                        // --------------------------------------------
 
-                        /// LOGIN BUTTON
                         SizedBox(
-                          width: double.infinity,
+                          width:
+                          double.infinity,
+
                           height: 65,
 
-                          child: ElevatedButton(
-
-                            onPressed: () async {
-
-                              try{
-
-                                UserCredential user =
-
-                                await FirebaseAuth
-                                    .instance
-
-                                    .signInWithEmailAndPassword(
-
-                                  email:
-                                  adminIdController
-                                      .text
-                                      .trim(),
-
-                                  password:
-                                  passwordController
-                                      .text
-                                      .trim(),
-                                );
-
-                                String uid =
-
-                                    user.user!.uid;
-
-                                DocumentSnapshot doc =
-
-                                await FirebaseFirestore
-                                    .instance
-
-                                    .collection(
-                                  "admins",
-                                )
-
-                                    .doc(uid)
-
-                                    .get();
-
-                                if(
-                                doc.exists &&
-
-                                    doc["role"]
-                                        ==
-                                        "admin"
-                                ){
-
-                                  SharedPreferences prefs =
-
-                                  await SharedPreferences
-                                      .getInstance();
-
-                                  await prefs.setString(
-
-                                    "adminUid",
-
-                                    user.user!.uid,
-                                  );
-
-                                  await prefs.setString(
-
-                                    "adminEmail",
-
-                                    user.user!.email!,
-                                  );
-
-                                  await prefs.setString(
-
-                                    "savedPassword",
-
-                                    passwordController.text
-                                        .trim(),
-                                  );
-
-                                  await prefs.setString(
-                                    "userRole",
-                                    "admin",
-                                  );
-
-                                  bool alreadyAsked =
-
-                                      prefs.getBool(
-                                        "adminBiometricAsked",
-                                      )
-
-                                          ??
-
-                                          false;
-
-                                  if(
-                                  !alreadyAsked
-                                  ){
-
-                                    showDialog(
-
-                                      context:context,
-
-                                      builder:(_){
-
-                                        return AlertDialog(
-
-                                          title:
-                                          const Text(
-                                            "Enable Biometric?",
-                                          ),
-
-                                          content:
-                                          const Text(
-                                            "Use fingerprint login?",
-                                          ),
-
-                                          actions:[
-
-                                            TextButton(
-
-                                              onPressed:(){
-
-                                                prefs.setBool(
-
-                                                  "adminBiometric",
-
-                                                  false,
-                                                );
-
-                                                prefs.setBool(
-
-                                                  "adminBiometricAsked",
-
-                                                  true,
-                                                );
-
-                                                Navigator.pop(
-                                                  context,
-                                                );
-
-                                                Navigator.pushReplacement(
-
-                                                  context,
-
-                                                  MaterialPageRoute(
-
-                                                    builder:
-                                                        (_)=>
-
-                                                    const AdminMainNavigation(),
-                                                  ),
-                                                );
-                                              },
-
-                                              child:
-                                              const Text(
-                                                "No",
-                                              ),
-                                            ),
-
-                                            ElevatedButton(
-
-                                              onPressed:(){
-
-                                                prefs.setBool(
-
-                                                  "adminBiometric",
-
-                                                  true,
-                                                );
-
-                                                prefs.setBool(
-
-                                                  "adminBiometricAsked",
-
-                                                  true,
-                                                );
-
-                                                Navigator.pop(
-                                                  context,
-                                                );
-
-                                                Navigator.pushReplacement(
-
-                                                  context,
-
-                                                  MaterialPageRoute(
-
-                                                    builder:
-                                                        (_)=>
-
-                                                    const AdminMainNavigation(),
-                                                  ),
-                                                );
-                                              },
-
-                                              child:
-                                              const Text(
-                                                "Enable",
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    );
-                                  }
-
-                                  else{
-
-                                    Navigator.pushReplacement(
-
-                                      context,
-
-                                      MaterialPageRoute(
-
-                                        builder:
-                                            (_)=>
-
-                                        const AdminMainNavigation(),
-                                      ),
-                                    );
-                                  }
-                                }
-
-
-
-
-                                else{
-
-                                  await FirebaseAuth
-                                      .instance
-                                      .signOut();
-
-                                  ScaffoldMessenger.of(
-                                    context,
-                                  )
-
-                                      .showSnackBar(
-
-                                    const SnackBar(
-
-                                      content:
-                                      Text(
-                                        "Not Admin Account",
-                                      ),
-                                    ),
-                                  );
-                                }
-                              }
-
-                              catch(e){
-
-                                ScaffoldMessenger.of(
-                                  context,
-                                )
-
-                                    .showSnackBar(
-
-                                  SnackBar(
-                                    content:
-                                    Text(
-                                      e.toString(),
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-
-                            style: ElevatedButton.styleFrom(
-
+                          child:
+                          ElevatedButton(
+                            onPressed:
+                            loginNormally,
+
+                            style:
+                            ElevatedButton
+                                .styleFrom(
                               backgroundColor:
-                              const Color(0xFF008CFF),
+                              const Color(
+                                0xFF008CFF,
+                              ),
 
-                              shape: RoundedRectangleBorder(
+                              shape:
+                              RoundedRectangleBorder(
                                 borderRadius:
-                                BorderRadius.circular(22),
+                                BorderRadius
+                                    .circular(
+                                  22,
+                                ),
                               ),
                             ),
 
-                            child: const Text(
+                            child:
+                            const Text(
                               "Sign in",
 
-                              style: TextStyle(
+                              style:
+                              TextStyle(
                                 fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                fontWeight:
+                                FontWeight.bold,
+                                color:
+                                Colors.white,
                               ),
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 28),
-
-                        Row(
-
-                          children: [
-
-                            Expanded(
-                              child: Divider(
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-
-                            const Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-
-                              child: Text("or"),
-                            ),
-
-                            Expanded(
-                              child: Divider(
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(
+                          height: 20,
                         ),
 
-                        const SizedBox(height: 28),
+                        // --------------------------------------------
+                        // CREATE ACCOUNT
+                        // --------------------------------------------
 
-
-                        /// CREATE ACCOUNT
                         GestureDetector(
-
                           onTap: () {
-
                             Navigator.push(
-
                               context,
-
                               MaterialPageRoute(
                                 builder: (_) =>
                                 const AdminSignupPage(),
@@ -936,154 +935,104 @@ class _AdminLoginPageState
                             );
                           },
 
-                          child: Container(
-                            width: double.infinity,
+                          child:
+                          Container(
+                            width:
+                            double.infinity,
+
                             height: 62,
 
-                            decoration: BoxDecoration(
+                            alignment:
+                            Alignment.center,
 
-                              borderRadius:
-                              BorderRadius.circular(22),
+                            child:
+                            const Text(
+                              "Create new account",
 
-                              border: Border.all(
-                                color: Colors.blue.shade200,
+                              style:
+                              TextStyle(
+                                color:
+                                Colors.blue,
+                                fontSize: 16,
+                                fontWeight:
+                                FontWeight.w600,
                               ),
-                            ),
-
-                            child: const Row(
-                              mainAxisAlignment:
-                              MainAxisAlignment.center,
-
-                              children: [
-
-                                Icon(
-                                  Icons.person_add_alt_1,
-                                  color: Colors.blue,
-                                ),
-
-                                SizedBox(width: 10),
-
-                                Text(
-                                  "Create new account",
-
-                                  style: TextStyle(
-                                    color: Colors.blue,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
                             ),
                           ),
                         ),
 
-                        GestureDetector(
+                        const SizedBox(
+                          height: 18,
+                        ),
 
+                        // --------------------------------------------
+                        // BIOMETRIC
+                        // --------------------------------------------
+
+                        GestureDetector(
                           onTap:
                           loginWithBiometric,
 
                           child:
                           Container(
-
                             width:
                             double.infinity,
 
-                            height:
-                            62,
+                            height: 62,
 
                             decoration:
                             BoxDecoration(
-
-                              color:
-
-                              isDark
-
+                              color: isDark
                                   ? const Color(
                                 0xFF1E2A47,
                               )
-
                                   : Colors.white,
 
                               borderRadius:
-                              BorderRadius.circular(
+                              BorderRadius
+                                  .circular(
                                 22,
-                              ),
-
-                              border:
-                              Border.all(
-                                color:
-                                Colors.grey.shade300,
                               ),
                             ),
 
                             child:
                             const Row(
-
                               mainAxisAlignment:
-                              MainAxisAlignment.center,
+                              MainAxisAlignment
+                                  .center,
 
-                              children:[
-
+                              children: [
                                 Icon(
-                                  Icons.fingerprint,
+                                  Icons
+                                      .fingerprint,
                                   color:
                                   Colors.blue,
                                 ),
 
                                 SizedBox(
-                                  width:10,
+                                  width: 10,
                                 ),
 
                                 Text(
                                   "Use Biometric",
+
                                   style:
                                   TextStyle(
-                                    fontSize:20,
-                                    fontWeight:
-                                    FontWeight.w600,
+                                    fontSize:
+                                    16,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        )
+                        ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 35),
-
-                  Row(
-                    mainAxisAlignment:
-                    MainAxisAlignment.center,
-
-                    children: [
-
-                      Text(
-                        "Don't have an account?",
-
-                        style: TextStyle(
-                          color:
-                          isDark
-                              ? Colors.white70
-                              : Colors.grey,
-                        ),
-                      ),
-
-                      const SizedBox(width: 5),
-
-                      const Text(
-                        "Sign up",
-
-                        style: TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(
+                    height: 30,
                   ),
-
-                  const SizedBox(height: 30),
                 ],
               ),
             ),

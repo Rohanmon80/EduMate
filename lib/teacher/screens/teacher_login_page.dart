@@ -605,19 +605,10 @@ class _TeacherLoginPageState
                                   "teacher",
                                 );
 
-                                bool alreadyAsked =
+                                bool alreadyConfigured =
+                                prefs.containsKey("teacherBiometric");
 
-                                    prefs.getBool(
-                                      "teacherBiometricAsked",
-                                    )
-
-                                        ??
-
-                                        false;
-
-                                if(
-                                !alreadyAsked
-                                ){
+                                if (!alreadyConfigured) {
 
                                   showDialog(
 
