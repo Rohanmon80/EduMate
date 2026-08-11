@@ -1,3 +1,21 @@
+# EduMate
+
+## College Management System
+
+EduMate is a college management application developed by **Rohan Mondal**.
+
+### Developer
+
+**Rohan Mondal**  
+B.Tech – Artificial Intelligence & Machine Learning
+
+### Copyright
+
+© 2026 Rohan Mondal. All rights reserved.
+
+This repository is publicly available for viewing and evaluation.
+Public availability does not grant permission to claim EduMate or its
+original implementation as your own work.
 # edumate
 
 A new Flutter project.
