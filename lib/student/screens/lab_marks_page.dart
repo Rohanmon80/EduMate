@@ -224,11 +224,11 @@ class _LabMarksPageState
                     final type =
                         data["type"]
                             ?.toString()
+                            .trim()
                             .toLowerCase() ??
                             "";
 
-                    return type ==
-                        "lab";
+                    return type.contains("lab");
                   },
                 ).toList();
 
