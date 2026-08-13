@@ -18,6 +18,8 @@ dependencies:
   share_plus: ^11.1.0
 
   dio: ^5.4.0
+  pdf: ^3.11.3
+  printing: ^5.14.2
 
   excel: ^4.0.6
   path_provider: ^2.1.5
@@ -53,6 +55,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/memo/
 
 
 flutter_launcher_icons:
