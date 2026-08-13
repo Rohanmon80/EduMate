@@ -1,10 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/memo_service.dart';
-import '../widgets/memo_header.dart';
-import '../widgets/memo_student_details.dart';
-import '../widgets/memo_subject_table.dart';
-import '../widgets/memo_summary_card.dart';
 
 class MemoPage extends StatefulWidget {
   const MemoPage({super.key});
@@ -14,187 +12,297 @@ class MemoPage extends StatefulWidget {
 }
 
 class _MemoPageState extends State<MemoPage> {
-  int _selectedSemesterNumber() {
-    switch (selectedSemester) {
-      case 'I Year I Semester':
-        return 1;
-      case 'I Year II Semester':
-        return 2;
-      case 'II Year I Semester':
-        return 3;
-      case 'II Year II Semester':
-        return 4;
-      case 'III Year I Semester':
-        return 5;
-      case 'III Year II Semester':
-        return 6;
-      case 'IV Year I Semester':
-        return 7;
-      case 'IV Year II Semester':
-        return 8;
-      default:
-        return 1;
+  final MemoService _memoService = MemoService();
+
+  int? _semester;
+
+  bool _loading = true;
+  bool _generating = false;
+
+  Map<String, dynamic>? _memo;
+
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMemo();
+  }
+
+  // ============================================================
+  // LOAD STUDENT SEMESTER + MEMO
+  // ============================================================
+
+  Future<void> _loadMemo() async {
+    try {
+      final uid =
+          FirebaseAuth.instance.currentUser?.uid;
+
+      if (uid == null || uid.isEmpty) {
+        setState(() {
+          _loading = false;
+          _error = "Student is not logged in.";
+        });
+        return;
+      }
+
+      final student =
+      await _memoService.getStudent(
+        studentId: uid,
+      );
+
+      if (student == null) {
+        setState(() {
+          _loading = false;
+          _error = "Student profile was not found.";
+        });
+        return;
+      }
+
+      final semesterValue =
+      student["semester"];
+
+      final semester =
+      semesterValue is num
+          ? semesterValue.toInt()
+          : int.tryParse(
+        semesterValue?.toString() ?? "",
+      ) ??
+          1;
+
+      final memo =
+      await _memoService.getMemo(
+        studentId: uid,
+        semester: semester,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _semester = semester;
+        _memo = memo?.data();
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
     }
   }
-  final MemoService service = MemoService();
 
-  String? selectedSemester;
-  String? selectedExamType;
-  String? selectedExamName;
+  // ============================================================
+  // GENERATE MEMO
+  // ============================================================
 
-  bool showMemo = false;
+  Future<void> _generateMemo() async {
+    if (_semester == null) return;
 
-  final List<String> semesters = [
-    'I Year I Semester',
-    'I Year II Semester',
-    'II Year I Semester',
-    'II Year II Semester',
-    'III Year I Semester',
-    'III Year II Semester',
-    'IV Year I Semester',
-    'IV Year II Semester',
-  ];
+    final uid =
+        FirebaseAuth.instance.currentUser?.uid;
 
-  final List<String> examTypes = [
-    'Regular',
-    'Supply',
-  ];
+    if (uid == null || uid.isEmpty) {
+      _showMessage(
+        "Student is not logged in.",
+      );
+      return;
+    }
 
-  final List<String> examNames = [
-    'End Semester Examination',
-    'Supplementary Examination',
-  ];
+    setState(() {
+      _generating = true;
+      _error = null;
+    });
+
+    try {
+      await _memoService.generateMemo(
+        studentId: uid,
+        semester: _semester!,
+      );
+
+      final memo =
+      await _memoService.getMemo(
+        studentId: uid,
+        semester: _semester!,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _memo = memo?.data();
+        _generating = false;
+      });
+
+      _showMessage(
+        "Marks memo generated successfully.",
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _generating = false;
+        _error = e.toString();
+      });
+
+      _showMessage(
+        e.toString().replaceFirst(
+          "Exception: ",
+          "",
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // MESSAGE
+  // ============================================================
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+        ),
+      );
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    if (showMemo) {
-      return _buildMemoPage();
-    }
-
-    return _buildSelectionPage();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          "Marks Memo",
+        ),
+      ),
+      body: _buildBody(),
+    );
   }
 
   // ============================================================
-  // MEMO SELECTION PAGE
+  // BODY
   // ============================================================
 
-  Widget _buildSelectionPage() {
-    return Scaffold(
-      backgroundColor: Colors.white,
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
 
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF2196F3),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'Print Marks Memo',
-          style: TextStyle(
-            fontSize: 25,
-            fontWeight: FontWeight.w500,
-          ),
+    if (_error != null &&
+        _memo == null) {
+      return _buildError();
+    }
+
+    if (_memo == null) {
+      return _buildNoMemo();
+    }
+
+    return _buildMemo();
+  }
+
+  // ============================================================
+  // ERROR
+  // ============================================================
+
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 60,
+              color: Colors.red,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _error ?? "Something went wrong.",
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _loadMemo,
+              child: const Text(
+                "Try Again",
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
 
-      body: SingleChildScrollView(
+  // ============================================================
+  // NO MEMO
+  // ============================================================
+
+  Widget _buildNoMemo() {
+    return Center(
+      child: Padding(
         padding: const EdgeInsets.all(24),
-
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-
+            const Icon(
+              Icons.description_outlined,
+              size: 70,
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Marks memo is not generated yet.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _semester == null
+                  ? ""
+                  : "Semester $_semester",
+              style: const TextStyle(
+                fontSize: 15,
+              ),
+            ),
             const SizedBox(height: 25),
-
-            // ----------------------------------------------------
-            // SELECT SEMESTER
-            // ----------------------------------------------------
-
-            _buildDropdown(
-              hint: 'Select Semester',
-              value: selectedSemester,
-              items: semesters,
-              onChanged: (value) {
-                setState(() {
-                  selectedSemester = value;
-                });
-              },
-            ),
-
-            const SizedBox(height: 28),
-
-            // ----------------------------------------------------
-            // SELECT EXAM TYPE
-            // ----------------------------------------------------
-
-            _buildDropdown(
-              hint: 'Select Exam Type',
-              value: selectedExamType,
-              items: examTypes,
-              onChanged: (value) {
-                setState(() {
-                  selectedExamType = value;
-
-                  // Reset exam name whenever exam type changes.
-                  selectedExamName = null;
-                });
-              },
-            ),
-
-            const SizedBox(height: 28),
-
-            // ----------------------------------------------------
-            // SELECT EXAM NAME
-            // ----------------------------------------------------
-
-            _buildDropdown(
-              hint: 'Select Exam Name',
-              value: selectedExamName,
-              items: examNames,
-              onChanged: selectedExamType == null
-                  ? null
-                  : (value) {
-                setState(() {
-                  selectedExamName = value;
-                });
-              },
-            ),
-
-            const SizedBox(height: 45),
-
-            // ----------------------------------------------------
-            // PRINT MEMO BUTTON
-            // ----------------------------------------------------
-
             SizedBox(
-              height: 62,
-
+              width: 220,
+              height: 50,
               child: ElevatedButton.icon(
-                onPressed: _canPrintMemo()
-                    ? _openMemo
-                    : null,
-
-                icon: const Icon(
-                  Icons.print,
-                  size: 28,
-                  color: Colors.white,
-                ),
-
-                label: const Text(
-                  'Print Memo',
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w600,
+                onPressed:
+                _generating
+                    ? null
+                    : _generateMemo,
+                icon: _generating
+                    ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child:
+                  CircularProgressIndicator(
+                    strokeWidth: 2,
                     color: Colors.white,
                   ),
+                )
+                    : const Icon(
+                  Icons.description,
                 ),
-
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2196F3),
-                  disabledBackgroundColor: Colors.grey.shade300,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  elevation: 3,
+                label: Text(
+                  _generating
+                      ? "Generating..."
+                      : "Generate Memo",
                 ),
               ),
             ),
@@ -205,277 +313,780 @@ class _MemoPageState extends State<MemoPage> {
   }
 
   // ============================================================
-  // DROPDOWN
+  // MEMO
   // ============================================================
 
-  Widget _buildDropdown({
-    required String hint,
-    required String? value,
-    required List<String> items,
-    required ValueChanged<String?>? onChanged,
-  }) {
-    return Container(
-      height: 90,
+  Widget _buildMemo() {
+    final memo = _memo!;
 
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(
-          color: Colors.grey.shade500,
-          width: 2,
-        ),
-        borderRadius: BorderRadius.circular(22),
-      ),
+    final studentName =
+    _stringValue(
+      memo["studentName"],
+    );
 
-      padding: const EdgeInsets.symmetric(
-        horizontal: 20,
-      ),
+    final rollNumber =
+    _stringValue(
+      memo["rollNumber"],
+    );
 
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
+    final program =
+    _stringValue(
+      memo["program"],
+    );
 
-          isExpanded: true,
+    final branch =
+    _stringValue(
+      memo["branch"],
+    );
 
-          icon: const Icon(
-            Icons.arrow_drop_down,
-            size: 35,
-            color: Colors.grey,
+    final year =
+    _stringValue(
+      memo["year"],
+    );
+
+    final section =
+    _stringValue(
+      memo["section"],
+    );
+
+    final academicYear =
+    _stringValue(
+      memo["academicYear"],
+    );
+
+    final dateOfIssue =
+    _stringValue(
+      memo["dateOfIssue"],
+    );
+
+    final semester =
+    _numberValue(
+      memo["semester"],
+    ).toInt();
+
+    final registered =
+    _numberValue(
+      memo["courseRegistered"],
+    ).toInt();
+
+    final appeared =
+    _numberValue(
+      memo["courseAppeared"],
+    ).toInt();
+
+    final passed =
+    _numberValue(
+      memo["coursePassed"],
+    ).toInt();
+
+    final totalCredits =
+    _numberValue(
+      memo["totalCredits"],
+    );
+
+    final sgpa =
+    _numberValue(
+      memo["sgpa"],
+    );
+
+    final cgpa =
+    _numberValue(
+      memo["cgpa"],
+    );
+
+    final imageUrl =
+    _stringValue(
+      memo["studentImageUrl"],
+    );
+
+    final courses =
+    _getCourses(
+      memo["courses"],
+    );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildMemoCard(
+            studentName: studentName,
+            rollNumber: rollNumber,
+            program: program,
+            branch: branch,
+            year: year,
+            section: section,
+            academicYear: academicYear,
+            dateOfIssue: dateOfIssue,
+            semester: semester,
+            imageUrl: imageUrl,
+            courses: courses,
+            registered: registered,
+            appeared: appeared,
+            passed: passed,
+            totalCredits: totalCredits,
+            sgpa: sgpa,
+            cgpa: cgpa,
           ),
 
-          hint: Text(
-            hint,
-            style: const TextStyle(
-              fontSize: 22,
-              color: Color(0xFF444444),
+          const SizedBox(height: 20),
+
+          // ----------------------------------------------------
+          // DOWNLOAD BUTTON
+          // ----------------------------------------------------
+
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                _showMessage(
+                  "PDF download will be connected in the next step.",
+                );
+              },
+              icon: const Icon(
+                Icons.download,
+              ),
+              label: const Text(
+                "Download Marks Memo",
+              ),
             ),
           ),
 
-          style: const TextStyle(
-            fontSize: 22,
-            color: Colors.black87,
+          const SizedBox(height: 12),
+
+          // ----------------------------------------------------
+          // UPDATE MEMO
+          // ----------------------------------------------------
+
+          OutlinedButton.icon(
+            onPressed:
+            _generating
+                ? null
+                : _generateMemo,
+            icon: const Icon(
+              Icons.refresh,
+            ),
+            label: const Text(
+              "Regenerate Memo",
+            ),
           ),
-
-          items: items.map(
-                (item) {
-              return DropdownMenuItem<String>(
-                value: item,
-
-                child: Text(
-                  item,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    color: Colors.black87,
-                  ),
-                ),
-              );
-            },
-          ).toList(),
-
-          onChanged: onChanged,
-        ),
+        ],
       ),
     );
   }
 
   // ============================================================
-  // VALIDATION
+  // MEMO CARD
   // ============================================================
 
-  bool _canPrintMemo() {
-    return selectedSemester != null &&
-        selectedExamType != null &&
-        selectedExamName != null;
-  }
-
-  // ============================================================
-  // OPEN MEMO
-  // ============================================================
-
-  void _openMemo() {
-    if (!_canPrintMemo()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please select semester, exam type and exam name.',
-          ),
+  Widget _buildMemoCard({
+    required String studentName,
+    required String rollNumber,
+    required String program,
+    required String branch,
+    required String year,
+    required String section,
+    required String academicYear,
+    required String dateOfIssue,
+    required int semester,
+    required String imageUrl,
+    required List<Map<String, dynamic>> courses,
+    required int registered,
+    required int appeared,
+    required int passed,
+    required double totalCredits,
+    required double sgpa,
+    required double cgpa,
+  }) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(
+          color: Colors.black87,
+          width: 1.2,
         ),
-      );
-
-      return;
-    }
-
-    setState(() {
-      showMemo = true;
-    });
-  }
-
-  // ============================================================
-  // ACTUAL MEMO PAGE
-  // ============================================================
-
-  Widget _buildMemoPage() {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade200,
-
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF2196F3),
-        foregroundColor: Colors.white,
-        elevation: 0,
-
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back,
-            size: 30,
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 5,
+            offset: Offset(0, 2),
+            color: Colors.black12,
           ),
-
-          onPressed: () {
-            setState(() {
-              showMemo = false;
-            });
-          },
-        ),
-
-        title: const Text(
-          'Provisional Memo',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-
-        centerTitle: true,
+        ],
       ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment:
+        CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(),
 
-      body: Center(
-        child: SingleChildScrollView(
-          child: Container(
-            width: 900,
+          const SizedBox(height: 18),
 
-            margin: const EdgeInsets.all(20),
+          const Center(
+            child: Text(
+              "MARKS MEMO",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
 
-            decoration: BoxDecoration(
-              color: Colors.white,
+          const SizedBox(height: 18),
 
-              borderRadius: BorderRadius.circular(15),
+          _buildStudentSection(
+            studentName: studentName,
+            rollNumber: rollNumber,
+            program: program,
+            branch: branch,
+            year: year,
+            section: section,
+            academicYear: academicYear,
+            semester: semester,
+            imageUrl: imageUrl,
+          ),
 
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 10,
-                  color: Colors.black12,
+          const SizedBox(height: 18),
+
+          _buildCourseTable(
+            courses,
+          ),
+
+          const SizedBox(height: 14),
+
+          _buildSummary(
+            registered: registered,
+            appeared: appeared,
+            passed: passed,
+            totalCredits: totalCredits,
+            sgpa: sgpa,
+            cgpa: cgpa,
+          ),
+
+          const SizedBox(height: 22),
+
+          Row(
+            mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+            crossAxisAlignment:
+            CrossAxisAlignment.end,
+            children: [
+              Text(
+                "Date of issue : "
+                    "$dateOfIssue",
+                style: const TextStyle(
+                  fontSize: 12,
                 ),
-              ],
+              ),
+              const Text(
+                "CONTROLLER OF\nEXAMINATIONS",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight:
+                  FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // HEADER
+  // ============================================================
+
+  Widget _buildHeader() {
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment:
+          CrossAxisAlignment.center,
+          children: [
+            _assetLogo(
+              "assets/memo/scient_logo.png",
+              60,
             ),
 
-            child: Padding(
-              padding: const EdgeInsets.all(25),
+            const SizedBox(width: 10),
 
+            const Expanded(
               child: Column(
                 children: [
-
-                  // ------------------------------------------------
-                  // SELECTED DETAILS
-                  // ------------------------------------------------
-
-                  _buildSelectedExamDetails(),
-
-                  const SizedBox(height: 25),
-
-                  // ------------------------------------------------
-                  // EXISTING MEMO HEADER
-                  // ------------------------------------------------
-
-                  const MemoHeader(),
-
-                  const SizedBox(height: 20),
-
-                  // ------------------------------------------------
-                  // STUDENT DETAILS
-                  // ------------------------------------------------
-
-                  const MemoStudentDetails(),
-
-                  const SizedBox(height: 25),
-
-                  // ------------------------------------------------
-                  // SUBJECT TABLE
-                  // ------------------------------------------------
-
-                  MemoSubjectTable(
-                    semester: _selectedSemesterNumber(),
-                    examType: selectedExamType!,
+                  Text(
+                    "SCIENT INSTITUTE OF TECHNOLOGY",
+                    textAlign:
+                    TextAlign.center,
+                    style: TextStyle(
+                      fontWeight:
+                      FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
-
-                  const SizedBox(height: 20),
-
-                  // ------------------------------------------------
-                  // SUMMARY
-                  // ------------------------------------------------
-
-                  MemoSummaryCard(
-                    semester: _selectedSemesterNumber(),
-                    examType: selectedExamType!,
+                  SizedBox(height: 3),
+                  Text(
+                    "(UGC AUTONOMOUS)",
+                    style: TextStyle(
+                      fontWeight:
+                      FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    "Accredited by NAAC with 'A+' Grade",
+                    textAlign:
+                    TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 9,
+                    ),
                   ),
                 ],
               ),
             ),
+
+            const SizedBox(width: 10),
+
+            Row(
+              children: [
+                _assetLogo(
+                  "assets/memo/ugc_logo.png",
+                  40,
+                ),
+                const SizedBox(width: 4),
+                _assetLogo(
+                  "assets/memo/naac_logo.png",
+                  40,
+                ),
+                const SizedBox(width: 4),
+                _assetLogo(
+                  "assets/memo/jntuh_logo.png",
+                  40,
+                ),
+              ],
+            ),
+          ],
+        ),
+
+        const Divider(
+          color: Colors.black,
+          thickness: 1,
+        ),
+      ],
+    );
+  }
+
+  Widget _assetLogo(
+      String path,
+      double size,
+      ) {
+    return Image.asset(
+      path,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder:
+          (_, __, ___) =>
+          SizedBox(
+            width: size,
+            height: size,
+            child: const Icon(
+              Icons.image_not_supported,
+              size: 24,
+            ),
+          ),
+    );
+  }
+
+  // ============================================================
+  // STUDENT SECTION
+  // ============================================================
+
+  Widget _buildStudentSection({
+    required String studentName,
+    required String rollNumber,
+    required String program,
+    required String branch,
+    required String year,
+    required String section,
+    required String academicYear,
+    required int semester,
+    required String imageUrl,
+  }) {
+    return Row(
+      crossAxisAlignment:
+      CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
+            children: [
+              _detailRow(
+                "Name",
+                studentName,
+              ),
+              _detailRow(
+                "Hall Ticket No.",
+                rollNumber,
+              ),
+              _detailRow(
+                "Program",
+                program,
+              ),
+              _detailRow(
+                "Branch",
+                branch,
+              ),
+              _detailRow(
+                "Year",
+                year,
+              ),
+              _detailRow(
+                "Semester",
+                "Semester $semester",
+              ),
+              _detailRow(
+                "Section",
+                section,
+              ),
+              _detailRow(
+                "Academic Year",
+                academicYear,
+              ),
+            ],
           ),
         ),
+
+        const SizedBox(width: 15),
+
+        Container(
+          width: 95,
+          height: 115,
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Colors.black54,
+            ),
+          ),
+          child: imageUrl.isEmpty
+              ? const Icon(
+            Icons.person,
+            size: 55,
+          )
+              : Image.network(
+            imageUrl,
+            fit: BoxFit.cover,
+            errorBuilder:
+                (_, __, ___) =>
+            const Icon(
+              Icons.person,
+              size: 55,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _detailRow(
+      String label,
+      String value,
+      ) {
+    return Padding(
+      padding:
+      const EdgeInsets.symmetric(
+        vertical: 2,
+      ),
+      child: Row(
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              "$label :",
+              style: const TextStyle(
+                fontWeight:
+                FontWeight.bold,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   // ============================================================
-  // SELECTED EXAM INFORMATION
+  // COURSE TABLE
   // ============================================================
 
-  Widget _buildSelectedExamDetails() {
-    return Container(
-      width: double.infinity,
-
-      padding: const EdgeInsets.all(18),
-
-      decoration: BoxDecoration(
-        color: const Color(0xFFE3F2FD),
-
-        borderRadius: BorderRadius.circular(12),
-
-        border: Border.all(
-          color: const Color(0xFF2196F3),
-        ),
+  Widget _buildCourseTable(
+      List<Map<String, dynamic>> courses,
+      ) {
+    return Table(
+      border: TableBorder.all(
+        color: Colors.black54,
       ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-
-        children: [
-
-          Text(
-            selectedSemester ?? '',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1565C0),
-            ),
+      columnWidths: const {
+        0: FixedColumnWidth(35),
+        1: FlexColumnWidth(1.4),
+        2: FlexColumnWidth(2.8),
+        3: FixedColumnWidth(50),
+        4: FixedColumnWidth(65),
+        5: FixedColumnWidth(60),
+        6: FixedColumnWidth(55),
+      },
+      children: [
+        const TableRow(
+          decoration:
+          BoxDecoration(
+            color: Color(0xFFEFEFEF),
           ),
+          children: [
+            _TableCell("S.No"),
+            _TableCell("Course Code"),
+            _TableCell("Course Name"),
+            _TableCell("Grade"),
+            _TableCell("Grade Point"),
+            _TableCell("Result"),
+            _TableCell("Credits"),
+          ],
+        ),
 
-          const SizedBox(height: 8),
+        ...List.generate(
+          courses.length,
+              (index) {
+            final course =
+            courses[index];
 
-          Text(
-            'Exam Type: ${selectedExamType ?? ''}',
-            style: const TextStyle(
-              fontSize: 16,
-            ),
+            return TableRow(
+              children: [
+                _TableCell(
+                  "${index + 1}",
+                ),
+                _TableCell(
+                  _stringValue(
+                    course["courseCode"],
+                  ),
+                ),
+                _TableCell(
+                  _stringValue(
+                    course["courseName"],
+                  ),
+                ),
+                _TableCell(
+                  _stringValue(
+                    course["grade"],
+                  ),
+                ),
+                _TableCell(
+                  _numberValue(
+                    course["gradePoint"],
+                  ).toStringAsFixed(2),
+                ),
+                _TableCell(
+                  _stringValue(
+                    course["result"],
+                  ),
+                ),
+                _TableCell(
+                  _numberValue(
+                    course["credits"],
+                  ).toStringAsFixed(1),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // SUMMARY
+  // ============================================================
+
+  Widget _buildSummary({
+    required int registered,
+    required int appeared,
+    required int passed,
+    required double totalCredits,
+    required double sgpa,
+    required double cgpa,
+  }) {
+    return Column(
+      crossAxisAlignment:
+      CrossAxisAlignment.stretch,
+      children: [
+        const Divider(
+          color: Colors.black,
+        ),
+
+        Padding(
+          padding:
+          const EdgeInsets.symmetric(
+            vertical: 8,
           ),
-
-          const SizedBox(height: 4),
-
-          Text(
-            'Exam: ${selectedExamName ?? ''}',
-            style: const TextStyle(
-              fontSize: 16,
-            ),
+          child: Wrap(
+            spacing: 18,
+            runSpacing: 8,
+            children: [
+              Text(
+                "Course Registered : $registered",
+                style: const TextStyle(
+                  fontWeight:
+                  FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+              Text(
+                "Course Appeared : $appeared",
+                style: const TextStyle(
+                  fontWeight:
+                  FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+              Text(
+                "Course Passed : $passed",
+                style: const TextStyle(
+                  fontWeight:
+                  FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+              Text(
+                "Total Credits : "
+                    "${totalCredits.toStringAsFixed(1)}",
+                style: const TextStyle(
+                  fontWeight:
+                  FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
+
+        const Divider(
+          color: Colors.black,
+        ),
+
+        const SizedBox(height: 6),
+
+        Text(
+          "SEMESTER GRADE POINT AVERAGE (SGPA): "
+              "${sgpa.toStringAsFixed(2)}",
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
+
+        const SizedBox(height: 7),
+
+        Text(
+          "CUMULATIVE GRADE POINT AVERAGE (CGPA): "
+              "${cgpa.toStringAsFixed(2)}",
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // COURSES CONVERTER
+  // ============================================================
+
+  List<Map<String, dynamic>> _getCourses(
+      dynamic value,
+      ) {
+    if (value is! List) {
+      return [];
+    }
+
+    return value
+        .whereType<Map>()
+        .map(
+          (item) =>
+      Map<String, dynamic>.from(
+        item,
+      ),
+    )
+        .toList();
+  }
+
+  // ============================================================
+  // STRING
+  // ============================================================
+
+  String _stringValue(
+      dynamic value,
+      ) {
+    return value?.toString() ?? "";
+  }
+
+  // ============================================================
+  // NUMBER
+  // ============================================================
+
+  double _numberValue(
+      dynamic value,
+      ) {
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(
+      value?.toString() ?? "",
+    ) ??
+        0.0;
+  }
+}
+
+// ================================================================
+// TABLE CELL
+// ================================================================
+
+class _TableCell extends StatelessWidget {
+  final String text;
+
+  const _TableCell(
+      this.text,
+      );
+
+  @override
+  Widget build(
+      BuildContext context,
+      ) {
+    return Padding(
+      padding:
+      const EdgeInsets.all(5),
+      child: Text(
+        text,
+        textAlign:
+        TextAlign.center,
+        style: const TextStyle(
+          fontSize: 9,
+          fontWeight:
+          FontWeight.w500,
+        ),
       ),
     );
   }
