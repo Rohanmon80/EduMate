@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
+import '../../services/memo_pdf_service.dart';
 import '../../services/memo_service.dart';
 
 class MemoPage extends StatefulWidget {
@@ -13,6 +13,7 @@ class MemoPage extends StatefulWidget {
 
 class _MemoPageState extends State<MemoPage> {
   final MemoService _memoService = MemoService();
+  final MemoPdfService _memoPdfService = MemoPdfService();
 
   int? _semester;
 
@@ -26,7 +27,6 @@ class _MemoPageState extends State<MemoPage> {
   @override
   void initState() {
     super.initState();
-    _loadMemo();
   }
 
   // ============================================================
@@ -34,9 +34,16 @@ class _MemoPageState extends State<MemoPage> {
   // ============================================================
 
   Future<void> _loadMemo() async {
+    if (_semester == null) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _memo = null;
+    });
+
     try {
-      final uid =
-          FirebaseAuth.instance.currentUser?.uid;
+      final uid = FirebaseAuth.instance.currentUser?.uid;
 
       if (uid == null || uid.isEmpty) {
         setState(() {
@@ -46,40 +53,14 @@ class _MemoPageState extends State<MemoPage> {
         return;
       }
 
-      final student =
-      await _memoService.getStudent(
+      final memo = await _memoService.getMemo(
         studentId: uid,
-      );
-
-      if (student == null) {
-        setState(() {
-          _loading = false;
-          _error = "Student profile was not found.";
-        });
-        return;
-      }
-
-      final semesterValue =
-      student["semester"];
-
-      final semester =
-      semesterValue is num
-          ? semesterValue.toInt()
-          : int.tryParse(
-        semesterValue?.toString() ?? "",
-      ) ??
-          1;
-
-      final memo =
-      await _memoService.getMemo(
-        studentId: uid,
-        semester: semester,
+        semester: _semester!,
       );
 
       if (!mounted) return;
 
       setState(() {
-        _semester = semester;
         _memo = memo?.data();
         _loading = false;
         _error = null;
@@ -192,22 +173,59 @@ class _MemoPageState extends State<MemoPage> {
   // ============================================================
 
   Widget _buildBody() {
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
+    return Column(
+      children: [
+        _buildSemesterSelector(),
 
-    if (_error != null &&
-        _memo == null) {
-      return _buildError();
-    }
+        Expanded(
+          child: _loading
+              ? const Center(
+            child: CircularProgressIndicator(),
+          )
+              : _error != null && _memo == null
+              ? _buildError()
+              : _memo == null
+              ? _buildNoMemo()
+              : _buildMemo(),
+        ),
+      ],
+    );
+  }
+  Widget _buildSemesterSelector() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: DropdownButtonFormField<int>(
+        value: _semester,
+        decoration: const InputDecoration(
+          labelText: "Select Semester",
+          prefixIcon: Icon(Icons.school),
+          border: OutlineInputBorder(),
+        ),
+        hint: const Text("Choose semester"),
+        items: List.generate(
+          8,
+              (index) {
+            final semester = index + 1;
 
-    if (_memo == null) {
-      return _buildNoMemo();
-    }
+            return DropdownMenuItem<int>(
+              value: semester,
+              child: Text("Semester $semester"),
+            );
+          },
+        ),
+        onChanged: (value) {
+          if (value == null) return;
 
-    return _buildMemo();
+          setState(() {
+            _semester = value;
+            _memo = null;
+            _error = null;
+          });
+
+          _loadMemo();
+        },
+      ),
+    );
   }
 
   // ============================================================
@@ -405,43 +423,63 @@ class _MemoPageState extends State<MemoPage> {
     );
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       child: Column(
         children: [
-          _buildMemoCard(
-            studentName: studentName,
-            rollNumber: rollNumber,
-            program: program,
-            branch: branch,
-            year: year,
-            section: section,
-            academicYear: academicYear,
-            dateOfIssue: dateOfIssue,
-            semester: semester,
-            imageUrl: imageUrl,
-            courses: courses,
-            registered: registered,
-            appeared: appeared,
-            passed: passed,
-            totalCredits: totalCredits,
-            sgpa: sgpa,
-            cgpa: cgpa,
+          InteractiveViewer(
+            minScale: 0.6,
+            maxScale: 2.5,
+            boundaryMargin: const EdgeInsets.all(40),
+            child: _buildMemoCard(
+              studentName: studentName,
+              rollNumber: rollNumber,
+              program: program,
+              branch: branch,
+              year: year,
+              section: section,
+              academicYear: academicYear,
+              dateOfIssue: dateOfIssue,
+              semester: semester,
+              imageUrl: imageUrl,
+              courses: courses,
+              registered: registered,
+              appeared: appeared,
+              passed: passed,
+              totalCredits: totalCredits,
+              sgpa: sgpa,
+              cgpa: cgpa,
+            ),
           ),
 
           const SizedBox(height: 20),
 
-          // ----------------------------------------------------
           // DOWNLOAD BUTTON
-          // ----------------------------------------------------
-
           SizedBox(
             width: double.infinity,
             height: 54,
             child: ElevatedButton.icon(
-              onPressed: () {
-                _showMessage(
-                  "PDF download will be connected in the next step.",
-                );
+              onPressed: () async {
+                try {
+                  _showMessage(
+                    "Generating PDF...",
+                  );
+
+                  await _memoPdfService.shareMemo(
+                    memo: _memo!,
+                  );
+
+                  if (!mounted) return;
+
+                  _showMessage(
+                    "Marks memo PDF generated successfully.",
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+
+                  _showMessage(
+                    "Unable to generate PDF: $e",
+                  );
+                }
               },
               icon: const Icon(
                 Icons.download,
@@ -453,10 +491,6 @@ class _MemoPageState extends State<MemoPage> {
           ),
 
           const SizedBox(height: 12),
-
-          // ----------------------------------------------------
-          // UPDATE MEMO
-          // ----------------------------------------------------
 
           OutlinedButton.icon(
             onPressed:
@@ -527,6 +561,7 @@ class _MemoPageState extends State<MemoPage> {
             child: Text(
               "MARKS MEMO",
               style: TextStyle(
+                color: Colors.black,
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.2,
@@ -603,74 +638,94 @@ class _MemoPageState extends State<MemoPage> {
   Widget _buildHeader() {
     return Column(
       children: [
+        // ==========================================================
+        // ALL FOUR LOGOS
+        // ==========================================================
+
         Row(
-          crossAxisAlignment:
-          CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _assetLogo(
               "assets/memo/scient_logo.png",
-              60,
+              52,
             ),
 
-            const SizedBox(width: 10),
-
-            const Expanded(
-              child: Column(
-                children: [
-                  Text(
-                    "SCIENT INSTITUTE OF TECHNOLOGY",
-                    textAlign:
-                    TextAlign.center,
-                    style: TextStyle(
-                      fontWeight:
-                      FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                  SizedBox(height: 3),
-                  Text(
-                    "(UGC AUTONOMOUS)",
-                    style: TextStyle(
-                      fontWeight:
-                      FontWeight.bold,
-                      fontSize: 11,
-                    ),
-                  ),
-                  SizedBox(height: 3),
-                  Text(
-                    "Accredited by NAAC with 'A+' Grade",
-                    textAlign:
-                    TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 9,
-                    ),
-                  ),
-                ],
-              ),
+            _assetLogo(
+              "assets/memo/ugc_logo.png",
+              48,
             ),
 
-            const SizedBox(width: 10),
+            _assetLogo(
+              "assets/memo/naac_logo.png",
+              52,
+            ),
 
-            Row(
-              children: [
-                _assetLogo(
-                  "assets/memo/ugc_logo.png",
-                  40,
-                ),
-                const SizedBox(width: 4),
-                _assetLogo(
-                  "assets/memo/naac_logo.png",
-                  40,
-                ),
-                const SizedBox(width: 4),
-                _assetLogo(
-                  "assets/memo/jntuh_logo.png",
-                  40,
-                ),
-              ],
+            _assetLogo(
+              "assets/memo/jntuh_logo.png",
+              52,
             ),
           ],
         ),
+
+        const SizedBox(height: 8),
+
+        // ==========================================================
+        // COLLEGE INFORMATION
+        // ==========================================================
+
+        const Text(
+          "SCIENT INSTITUTE OF TECHNOLOGY",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+          ),
+        ),
+
+        const SizedBox(height: 2),
+
+        const Text(
+          "(UGC AUTONOMOUS)",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+          ),
+        ),
+
+        const SizedBox(height: 3),
+
+        const Text(
+          "Accredited by NAAC with 'A+' Grade, "
+              "Affiliated to JNTUH & Approved by AICTE",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 8,
+          ),
+        ),
+
+        const SizedBox(height: 2),
+
+        const Text(
+          "Ibrahimpatnam, Rangareddy, Telangana - 501506",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 8,
+          ),
+        ),
+
+        const SizedBox(height: 2),
+
+        const Text(
+          "www.scient.ac.in",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 8,
+          ),
+        ),
+
+        const SizedBox(height: 6),
 
         const Divider(
           color: Colors.black,
@@ -769,23 +824,38 @@ class _MemoPageState extends State<MemoPage> {
           height: 115,
           decoration: BoxDecoration(
             border: Border.all(
-              color: Colors.black54,
+              color: Colors.black,
             ),
           ),
           child: imageUrl.isEmpty
               ? const Icon(
             Icons.person,
             size: 55,
+            color: Colors.black54,
           )
               : Image.network(
             imageUrl,
             fit: BoxFit.cover,
+            loadingBuilder:
+                (context, child, loadingProgress) {
+              if (loadingProgress == null) {
+                return child;
+              }
+
+              return const Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                ),
+              );
+            },
             errorBuilder:
-                (_, __, ___) =>
-            const Icon(
-              Icons.person,
-              size: 55,
-            ),
+                (context, error, stackTrace) {
+              return const Icon(
+                Icons.person,
+                size: 55,
+                color: Colors.black54,
+              );
+            },
           ),
         ),
       ],
@@ -810,8 +880,8 @@ class _MemoPageState extends State<MemoPage> {
             child: Text(
               "$label :",
               style: const TextStyle(
-                fontWeight:
-                FontWeight.bold,
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
                 fontSize: 11,
               ),
             ),
@@ -820,6 +890,7 @@ class _MemoPageState extends State<MemoPage> {
             child: Text(
               value,
               style: const TextStyle(
+                color: Colors.black,
                 fontSize: 11,
               ),
             ),
@@ -841,13 +912,13 @@ class _MemoPageState extends State<MemoPage> {
         color: Colors.black54,
       ),
       columnWidths: const {
-        0: FixedColumnWidth(35),
-        1: FlexColumnWidth(1.4),
-        2: FlexColumnWidth(2.8),
-        3: FixedColumnWidth(50),
-        4: FixedColumnWidth(65),
-        5: FixedColumnWidth(60),
-        6: FixedColumnWidth(55),
+        0: FixedColumnWidth(28),
+        1: FixedColumnWidth(55),
+        2: FlexColumnWidth(2.5),
+        3: FixedColumnWidth(42),
+        4: FixedColumnWidth(52),
+        5: FixedColumnWidth(48),
+        6: FixedColumnWidth(45),
       },
       children: [
         const TableRow(
@@ -1083,9 +1154,9 @@ class _TableCell extends StatelessWidget {
         textAlign:
         TextAlign.center,
         style: const TextStyle(
-          fontSize: 9,
-          fontWeight:
-          FontWeight.w500,
+          color: Colors.black,
+          fontSize: 8,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
