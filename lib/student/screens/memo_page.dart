@@ -17,7 +17,7 @@ class _MemoPageState extends State<MemoPage> {
 
   int? _semester;
 
-  bool _loading = true;
+  bool _loading = false;
   bool _generating = false;
 
   Map<String, dynamic>? _memo;
@@ -159,12 +159,23 @@ class _MemoPageState extends State<MemoPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
         title: const Text(
           "Marks Memo",
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
-      body: _buildBody(),
+      body: Container(
+        color: Colors.white,
+        child: _buildBody(),
+      ),
     );
   }
 
@@ -178,7 +189,9 @@ class _MemoPageState extends State<MemoPage> {
         _buildSemesterSelector(),
 
         Expanded(
-          child: _loading
+          child: _semester == null
+              ? _buildSelectSemesterMessage()
+              : _loading
               ? const Center(
             child: CircularProgressIndicator(),
           )
@@ -189,6 +202,48 @@ class _MemoPageState extends State<MemoPage> {
               : _buildMemo(),
         ),
       ],
+    );
+  }
+  Widget _buildSelectSemesterMessage() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.school_outlined,
+              size: 70,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+
+            const SizedBox(height: 16),
+
+            Text(
+              "Select a Semester",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              "Choose a semester above to view your marks memo.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withOpacity(0.6),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
   Widget _buildSemesterSelector() {
@@ -367,11 +422,6 @@ class _MemoPageState extends State<MemoPage> {
       memo["section"],
     );
 
-    final academicYear =
-    _stringValue(
-      memo["academicYear"],
-    );
-
     final dateOfIssue =
     _stringValue(
       memo["dateOfIssue"],
@@ -402,13 +452,13 @@ class _MemoPageState extends State<MemoPage> {
       memo["totalCredits"],
     );
 
-    final sgpa =
-    _numberValue(
+    final double? sgpa =
+    _nullableNumberValue(
       memo["sgpa"],
     );
 
-    final cgpa =
-    _numberValue(
+    final double? cgpa =
+    _nullableNumberValue(
       memo["cgpa"],
     );
 
@@ -437,7 +487,7 @@ class _MemoPageState extends State<MemoPage> {
               branch: branch,
               year: year,
               section: section,
-              academicYear: academicYear,
+
               dateOfIssue: dateOfIssue,
               semester: semester,
               imageUrl: imageUrl,
@@ -520,7 +570,7 @@ class _MemoPageState extends State<MemoPage> {
     required String branch,
     required String year,
     required String section,
-    required String academicYear,
+
     required String dateOfIssue,
     required int semester,
     required String imageUrl,
@@ -529,8 +579,8 @@ class _MemoPageState extends State<MemoPage> {
     required int appeared,
     required int passed,
     required double totalCredits,
-    required double sgpa,
-    required double cgpa,
+    required double? sgpa,
+    required double? cgpa,
   }) {
     return Container(
       width: double.infinity,
@@ -578,7 +628,7 @@ class _MemoPageState extends State<MemoPage> {
             branch: branch,
             year: year,
             section: section,
-            academicYear: academicYear,
+
             semester: semester,
             imageUrl: imageUrl,
           ),
@@ -609,18 +659,19 @@ class _MemoPageState extends State<MemoPage> {
             CrossAxisAlignment.end,
             children: [
               Text(
-                "Date of issue : "
-                    "$dateOfIssue",
+                "Date of issue : $dateOfIssue",
                 style: const TextStyle(
+                  color: Colors.black,
                   fontSize: 12,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const Text(
                 "CONTROLLER OF\nEXAMINATIONS",
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontWeight:
-                  FontWeight.bold,
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
                   fontSize: 12,
                 ),
               ),
@@ -636,102 +687,131 @@ class _MemoPageState extends State<MemoPage> {
   // ============================================================
 
   Widget _buildHeader() {
-    return Column(
-      children: [
-        // ==========================================================
-        // ALL FOUR LOGOS
-        // ==========================================================
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 2,
+        vertical: 2,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // =====================================================
+          // SCIENT LOGO - LEFT
+          // =====================================================
 
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _assetLogo(
+          SizedBox(
+            width: 65,
+            height: 65,
+            child: _assetLogo(
               "assets/memo/scient_logo.png",
-              52,
+              65,
             ),
+          ),
 
-            _assetLogo(
-              "assets/memo/ugc_logo.png",
-              48,
+          const SizedBox(width: 6),
+
+          // =====================================================
+          // COLLEGE DETAILS - CENTER
+          // =====================================================
+
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Text(
+                  "SCIENT INSTITUTE OF TECHNOLOGY",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+
+                SizedBox(height: 1),
+
+                Text(
+                  "(UGC AUTONOMOUS)",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+
+                SizedBox(height: 2),
+
+                Text(
+                  "Accredited by NAAC with 'A+' Grade, "
+                      "Affiliated to JNTUH & Approved by AICTE",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 7.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                SizedBox(height: 1),
+
+                Text(
+                  "Ibrahimpatnam, Rangareddy, Telangana - 501506",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 7.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                SizedBox(height: 1),
+
+                Text(
+                  "www.scient.ac.in",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 7.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
-
-            _assetLogo(
-              "assets/memo/naac_logo.png",
-              52,
-            ),
-
-            _assetLogo(
-              "assets/memo/jntuh_logo.png",
-              52,
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 8),
-
-        // ==========================================================
-        // COLLEGE INFORMATION
-        // ==========================================================
-
-        const Text(
-          "SCIENT INSTITUTE OF TECHNOLOGY",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
           ),
-        ),
 
-        const SizedBox(height: 2),
+          const SizedBox(width: 5),
 
-        const Text(
-          "(UGC AUTONOMOUS)",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 11,
+          // =====================================================
+          // NAAC + UGC + JNTUH - RIGHT
+          // =====================================================
+
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _assetLogo(
+                "assets/memo/naac_logo.png",
+                43,
+              ),
+
+              const SizedBox(width: 1),
+
+              _assetLogo(
+                "assets/memo/ugc_logo.png",
+                43,
+              ),
+
+              const SizedBox(width: 1),
+
+              _assetLogo(
+                "assets/memo/jntuh_logo.png",
+                43,
+              ),
+            ],
           ),
-        ),
-
-        const SizedBox(height: 3),
-
-        const Text(
-          "Accredited by NAAC with 'A+' Grade, "
-              "Affiliated to JNTUH & Approved by AICTE",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 8,
-          ),
-        ),
-
-        const SizedBox(height: 2),
-
-        const Text(
-          "Ibrahimpatnam, Rangareddy, Telangana - 501506",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 8,
-          ),
-        ),
-
-        const SizedBox(height: 2),
-
-        const Text(
-          "www.scient.ac.in",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 8,
-          ),
-        ),
-
-        const SizedBox(height: 6),
-
-        const Divider(
-          color: Colors.black,
-          thickness: 1,
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -768,7 +848,7 @@ class _MemoPageState extends State<MemoPage> {
     required String branch,
     required String year,
     required String section,
-    required String academicYear,
+
     required int semester,
     required String imageUrl,
   }) {
@@ -808,10 +888,6 @@ class _MemoPageState extends State<MemoPage> {
               _detailRow(
                 "Section",
                 section,
-              ),
-              _detailRow(
-                "Academic Year",
-                academicYear,
               ),
             ],
           ),
@@ -909,7 +985,8 @@ class _MemoPageState extends State<MemoPage> {
       ) {
     return Table(
       border: TableBorder.all(
-        color: Colors.black54,
+        color: Colors.black,
+        width: 1,
       ),
       columnWidths: const {
         0: FixedColumnWidth(28),
@@ -924,7 +1001,7 @@ class _MemoPageState extends State<MemoPage> {
         const TableRow(
           decoration:
           BoxDecoration(
-            color: Color(0xFFEFEFEF),
+            color: Color(0xFFF2F2F2),
           ),
           children: [
             _TableCell("S.No"),
@@ -995,21 +1072,34 @@ class _MemoPageState extends State<MemoPage> {
     required int appeared,
     required int passed,
     required double totalCredits,
-    required double sgpa,
-    required double cgpa,
+    required double? sgpa,
+    required double? cgpa,
   }) {
+    const TextStyle summaryStyle = TextStyle(
+      color: Colors.black,
+      fontWeight: FontWeight.bold,
+      fontSize: 11,
+    );
+
+    const TextStyle averageStyle = TextStyle(
+      color: Colors.black,
+      fontWeight: FontWeight.bold,
+      fontSize: 12,
+    );
+
     return Column(
-      crossAxisAlignment:
-      CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Divider(
           color: Colors.black,
+          thickness: 1,
+          height: 1,
         ),
 
         Padding(
-          padding:
-          const EdgeInsets.symmetric(
+          padding: const EdgeInsets.symmetric(
             vertical: 8,
+            horizontal: 6,
           ),
           child: Wrap(
             spacing: 18,
@@ -1017,36 +1107,22 @@ class _MemoPageState extends State<MemoPage> {
             children: [
               Text(
                 "Course Registered : $registered",
-                style: const TextStyle(
-                  fontWeight:
-                  FontWeight.bold,
-                  fontSize: 11,
-                ),
+                style: summaryStyle,
               ),
+
               Text(
                 "Course Appeared : $appeared",
-                style: const TextStyle(
-                  fontWeight:
-                  FontWeight.bold,
-                  fontSize: 11,
-                ),
+                style: summaryStyle,
               ),
+
               Text(
                 "Course Passed : $passed",
-                style: const TextStyle(
-                  fontWeight:
-                  FontWeight.bold,
-                  fontSize: 11,
-                ),
+                style: summaryStyle,
               ),
+
               Text(
-                "Total Credits : "
-                    "${totalCredits.toStringAsFixed(1)}",
-                style: const TextStyle(
-                  fontWeight:
-                  FontWeight.bold,
-                  fontSize: 11,
-                ),
+                "Total Credits : ${totalCredits.toStringAsFixed(1)}",
+                style: summaryStyle,
               ),
             ],
           ),
@@ -1054,27 +1130,35 @@ class _MemoPageState extends State<MemoPage> {
 
         const Divider(
           color: Colors.black,
+          thickness: 1,
+          height: 1,
         ),
 
-        const SizedBox(height: 6),
-
-        Text(
-          "SEMESTER GRADE POINT AVERAGE (SGPA): "
-              "${sgpa.toStringAsFixed(2)}",
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            6,
+            8,
+            6,
+            2,
+          ),
+          child: Text(
+            "SEMESTER GRADE POINT AVERAGE (SGPA): "
+                "${sgpa == null ? "Not Available" : sgpa.toStringAsFixed(2)}",
+            style: averageStyle,
           ),
         ),
 
-        const SizedBox(height: 7),
-
-        Text(
-          "CUMULATIVE GRADE POINT AVERAGE (CGPA): "
-              "${cgpa.toStringAsFixed(2)}",
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            6,
+            5,
+            6,
+            8,
+          ),
+          child: Text(
+            "CUMULATIVE GRADE POINT AVERAGE (CGPA): "
+                "${cgpa == null ? "Not Available" : cgpa.toStringAsFixed(2)}",
+            style: averageStyle,
           ),
         ),
       ],
@@ -1128,6 +1212,21 @@ class _MemoPageState extends State<MemoPage> {
       value?.toString() ?? "",
     ) ??
         0.0;
+  }
+  double? _nullableNumberValue(
+      dynamic value,
+      ) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(
+      value.toString(),
+    );
   }
 }
 

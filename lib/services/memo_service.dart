@@ -601,17 +601,16 @@ class MemoService {
     )
         .get();
 
-    final Map<int,
-        List<Map<String, dynamic>>>
-    semesterMarks = {};
+    final Map<int, List<Map<String, dynamic>>> semesterMarks = {};
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
 
-      final semester =
+      final int? semester =
       (data["semester"] as num?)?.toInt();
 
       if (semester == null ||
+          semester < 1 ||
           semester > currentSemester) {
         continue;
       }
@@ -627,13 +626,31 @@ class MemoService {
     double totalCreditPoints = 0.0;
     double totalCredits = 0.0;
 
-    for (final entry
-    in semesterMarks.entries) {
-      final subjects =
-      <String,
-          List<Map<String, dynamic>>>{};
+    // ============================================================
+    // EVERY SEMESTER FROM 1 TO CURRENT MUST BE COMPLETE
+    // ============================================================
 
-      for (final mark in entry.value) {
+    for (
+    int semester = 1;
+    semester <= currentSemester;
+    semester++
+    ) {
+      final marks =
+      semesterMarks[semester];
+
+      // No released marks for a required semester
+      if (marks == null || marks.isEmpty) {
+        return null;
+      }
+
+      // ----------------------------------------------------------
+      // Group by subject
+      // ----------------------------------------------------------
+
+      final subjects =
+      <String, List<Map<String, dynamic>>>{};
+
+      for (final mark in marks) {
         final code =
             mark["subjectCode"]
                 ?.toString()
@@ -652,6 +669,14 @@ class MemoService {
             .add(mark);
       }
 
+      if (subjects.isEmpty) {
+        return null;
+      }
+
+      // ----------------------------------------------------------
+      // Build subject results
+      // ----------------------------------------------------------
+
       final results =
       <Map<String, dynamic>>[];
 
@@ -665,32 +690,44 @@ class MemoService {
       }
 
       if (results.isEmpty) {
-        continue;
+        return null;
       }
 
-      // Only a completely passed semester
-      // contributes to CGPA.
-      final semesterCompleted =
+      // ----------------------------------------------------------
+      // EVERY SUBJECT MUST PASS
+      // ----------------------------------------------------------
+
+      final bool semesterPassed =
       results.every(
             (result) =>
         result["pending"] != true &&
             result["pass"] == true,
       );
 
-      if (!semesterCompleted) {
-        continue;
+      // IMPORTANT:
+      // Never skip a failed semester.
+      if (!semesterPassed) {
+        return null;
       }
 
+      // ----------------------------------------------------------
+      // CREDIT-WEIGHTED FCGPA
+      // ----------------------------------------------------------
+
       for (final result in results) {
-        final credits =
+        final double credits =
             (result["credits"] as num?)
                 ?.toDouble() ??
                 0.0;
 
-        final gradePoint =
+        final double gradePoint =
             (result["gradePoint"] as num?)
                 ?.toDouble() ??
                 0.0;
+
+        if (credits <= 0) {
+          return null;
+        }
 
         totalCredits += credits;
 
@@ -699,7 +736,7 @@ class MemoService {
       }
     }
 
-    if (totalCredits == 0) {
+    if (totalCredits <= 0) {
       return null;
     }
 
@@ -956,20 +993,26 @@ class MemoService {
               0.0),
     );
 
-    final double sgpa =
-    calculateSGPA(
+    final bool semesterPassed =
+        courses.isNotEmpty &&
+            courses.every(
+                  (course) =>
+              course["result"] == "PASS",
+            );
+
+    final double? sgpa =
+    semesterPassed
+        ? calculateSGPA(
       courses
           .map(
-            (course) =>
-        <String, dynamic>{
-          "credits":
-          course["credits"],
-          "gradePoint":
-          course["gradePoint"],
+            (course) => <String, dynamic>{
+          "credits": course["credits"],
+          "gradePoint": course["gradePoint"],
         },
       )
           .toList(),
-    );
+    )
+        : null;
 
     // ----------------------------------------------------------
     // CGPA
@@ -1058,8 +1101,7 @@ class MemoService {
       "studentImageUrl":
       studentImageUrl,
 
-      "academicYear":
-      getCurrentAcademicYear(),
+
 
       "dateOfIssue":
       DateTime.now()
@@ -1080,13 +1122,15 @@ class MemoService {
       totalCredits,
 
       "sgpa":
-      double.parse(
+      sgpa == null
+          ? null
+          : double.parse(
         sgpa.toStringAsFixed(2),
       ),
 
       "cgpa":
       calculatedCGPA == null
-          ? 0.0
+          ? null
           : double.parse(
         calculatedCGPA
             .toStringAsFixed(2),

@@ -101,10 +101,7 @@ class MemoPdfService {
       memo["section"],
     );
 
-    final academicYear =
-    _stringValue(
-      memo["academicYear"],
-    );
+
 
     final dateOfIssue =
     _stringValue(
@@ -140,13 +137,13 @@ class MemoPdfService {
       memo["totalCredits"],
     );
 
-    final sgpa =
-    _numberValue(
+    final double? sgpa =
+    _nullableNumberValue(
       memo["sgpa"],
     );
 
-    final cgpa =
-    _numberValue(
+    final double? cgpa =
+    _nullableNumberValue(
       memo["cgpa"],
     );
 
@@ -249,8 +246,7 @@ class MemoPdfService {
                   semester,
                   section:
                   section,
-                  academicYear:
-                  academicYear,
+
                   studentPhoto:
                   studentPhoto,
                 ),
@@ -514,7 +510,7 @@ class MemoPdfService {
     required String year,
     required int semester,
     required String section,
-    required String academicYear,
+
     required pw.MemoryImage? studentPhoto,
   }) {
     return pw.Row(
@@ -557,10 +553,7 @@ class MemoPdfService {
                 section,
               ),
 
-              _detailLine(
-                "Academic Year",
-                academicYear,
-              ),
+
 
               _detailLine(
                 "Name",
@@ -1013,12 +1006,11 @@ class MemoPdfService {
   // ============================================================
 
   pw.Widget _buildSgpaCgpa({
-    required double sgpa,
-    required double cgpa,
+    required double? sgpa,
+    required double? cgpa,
   }) {
     return pw.Container(
-      decoration:
-      const pw.BoxDecoration(
+      decoration: const pw.BoxDecoration(
         border: pw.Border(
           left: pw.BorderSide(
             color: PdfColors.black,
@@ -1034,40 +1026,28 @@ class MemoPdfService {
           ),
         ),
       ),
-      padding:
-      const pw.EdgeInsets.all(
-        7,
-      ),
+      padding: const pw.EdgeInsets.all(7),
       child: pw.Column(
         crossAxisAlignment:
-        pw.CrossAxisAlignment
-            .start,
+        pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
             "SEMESTER GRADE POINT AVERAGE (SGPA): "
-                "${sgpa.toStringAsFixed(2)}",
-            style:
-            pw.TextStyle(
+                "${sgpa == null ? "Not Available" : sgpa.toStringAsFixed(2)}",
+            style: pw.TextStyle(
               fontSize: 9,
-              fontWeight:
-              pw.FontWeight
-                  .bold,
+              fontWeight: pw.FontWeight.bold,
             ),
           ),
 
-          pw.SizedBox(
-            height: 8,
-          ),
+          pw.SizedBox(height: 8),
 
           pw.Text(
             "CUMULATIVE GRADE POINT AVERAGE (CGPA): "
-                "${cgpa.toStringAsFixed(2)}",
-            style:
-            pw.TextStyle(
+                "${cgpa == null ? "Not Available" : cgpa.toStringAsFixed(2)}",
+            style: pw.TextStyle(
               fontSize: 9,
-              fontWeight:
-              pw.FontWeight
-                  .bold,
+              fontWeight: pw.FontWeight.bold,
             ),
           ),
         ],
@@ -1237,5 +1217,20 @@ class MemoPdfService {
       value?.toString() ?? "",
     ) ??
         0.0;
+  }
+  double? _nullableNumberValue(
+      dynamic value,
+      ) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(
+      value.toString(),
+    );
   }
 }
