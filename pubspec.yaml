@@ -21,7 +21,10 @@ dependencies:
   pdf: ^3.11.3
   printing: ^5.14.2
 
-  excel: ^4.0.6
+  excel_community: ^1.0.10
+  archive: ^4.0.9
+  xml: ^6.6.1
+
   path_provider: ^2.1.5
   open_filex: ^4.7.0
 
