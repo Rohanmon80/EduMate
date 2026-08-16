@@ -1,8 +1,15 @@
 import 'dart:ui';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import 'package:dio/dio.dart';
+import 'package:flutter_pdfview/flutter_pdfview.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'timetable_service.dart';
 
@@ -16,6 +23,74 @@ class TimetablePage extends StatefulWidget {
 
 class _TimetablePageState
     extends State<TimetablePage> {
+  Future<File> _downloadPdfFile(String url) async {
+    if (url.trim().isEmpty) {
+      throw Exception("PDF URL is empty");
+    }
+
+    final uri = Uri.tryParse(url);
+
+    if (uri == null || !uri.hasScheme) {
+      throw Exception("Invalid PDF URL");
+    }
+
+    final directory =
+    await getApplicationDocumentsDirectory();
+
+    final fileName =
+        "EduMate_Timetable_${year}_${department}_${section}.pdf";
+
+    final file = File(
+      "${directory.path}/$fileName",
+    );
+
+    debugPrint("Downloading timetable:");
+    debugPrint(url);
+    debugPrint("Saving to:");
+    debugPrint(file.path);
+
+    final response = await Dio().get<List<int>>(
+      url,
+      options: Options(
+        responseType: ResponseType.bytes,
+        followRedirects: true,
+        validateStatus: (status) {
+          return status != null &&
+              status >= 200 &&
+              status < 400;
+        },
+      ),
+    );
+
+    if (response.data == null || response.data!.isEmpty) {
+      throw Exception("Downloaded PDF is empty");
+    }
+
+    final bytes = response.data!;
+
+// Check PDF signature: %PDF
+    if (bytes.length < 4 ||
+        bytes[0] != 0x25 ||
+        bytes[1] != 0x50 ||
+        bytes[2] != 0x44 ||
+        bytes[3] != 0x46) {
+      throw Exception(
+        "The downloaded file is not a valid PDF. "
+            "Check your Supabase file URL and bucket permissions.",
+      );
+    }
+
+    await file.writeAsBytes(
+      bytes,
+      flush: true,
+    );
+
+    debugPrint(
+      "PDF downloaded successfully: ${file.path}",
+    );
+
+    return file;
+  }
 
 final TimetableService timetableService =
 TimetableService();
@@ -196,61 +271,218 @@ isRefreshing = false;
 // View Timetable
 //------------------------------------
 
-Future<void> viewTimetable() async {
+  Future<void> viewTimetable() async {
+    if (timetable == null) {
+      showMessage(
+        "No timetable available",
+        error: true,
+      );
+      return;
+    }
 
-if (timetable == null) {
-showMessage(
-"No timetable available",
-error: true,
-);
-return;
-}
+    final url =
+        timetable!["fileUrl"]?.toString() ?? "";
+    debugPrint("TIMETABLE PDF URL:");
+    debugPrint(url);
 
-try {
+    if (url.isEmpty) {
+      showMessage(
+        "Timetable PDF URL is missing",
+        error: true,
+      );
+      return;
+    }
 
-await timetableService.openPDF(
-timetable!["fileUrl"],
-);
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        },
+      );
 
-} catch (e) {
+      final file = await _downloadPdfFile(url);
 
-showMessage(
-e.toString(),
-error: true,
-);
-}
-}
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TimetablePdfViewerPage(
+            filePath: file.path,
+            title: "Class Timetable",
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+
+        showMessage(
+          "Unable to open PDF: $e",
+          error: true,
+        );
+      }
+
+      debugPrint(
+        "VIEW PDF ERROR: $e",
+      );
+    }
+  }
 
 //------------------------------------
 // Download Timetable
 //------------------------------------
 
-Future<void> downloadTimetable() async {
+  Future<void> downloadTimetable() async {
+    if (timetable == null) {
+      showMessage(
+        "No timetable available",
+        error: true,
+      );
+      return;
+    }
 
-if (timetable == null) {
+    final url =
+        timetable!["fileUrl"]?.toString() ?? "";
+    debugPrint("TIMETABLE PDF URL:");
+    debugPrint(url);
 
-showMessage(
-"No timetable available",
-error: true,
-);
+    if (url.isEmpty) {
+      showMessage(
+        "Timetable PDF URL is missing",
+        error: true,
+      );
+      return;
+    }
 
-return;
-}
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        },
+      );
 
-try {
+      final file = await _downloadPdfFile(url);
 
-await timetableService.openPDF(
-timetable!["fileUrl"],
-);
+      if (!mounted) return;
 
-} catch (e) {
+      Navigator.of(context).pop();
 
-showMessage(
-e.toString(),
-error: true,
-);
-}
-}
+      showModalBottomSheet(
+        context: context,
+        builder: (sheetContext) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.picture_as_pdf,
+                    color: Colors.red,
+                    size: 50,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  const Text(
+                    "Timetable Downloaded",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    file.path,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(sheetContext);
+
+                            await OpenFilex.open(
+                              file.path,
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.picture_as_pdf,
+                          ),
+                          label: const Text("Open"),
+                        ),
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(sheetContext);
+
+                            await SharePlus.instance
+                                .share(
+                              ShareParams(
+                                files: [
+                                  XFile(file.path),
+                                ],
+                                text:
+                                "EduMate Class Timetable",
+                              ),
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.share,
+                          ),
+                          label: const Text("Save / Share"),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+
+        showMessage(
+          "Download failed: $e",
+          error: true,
+        );
+      }
+
+      debugPrint(
+        "DOWNLOAD PDF ERROR: $e",
+      );
+    }
+  }
 //------------------------------------
 // Build
 //------------------------------------
@@ -695,6 +927,107 @@ const SizedBox(height: 20),
 
           child: child,
         ),
+      ),
+    );
+  }
+}
+class TimetablePdfViewerPage extends StatefulWidget {
+  final String filePath;
+  final String title;
+
+  const TimetablePdfViewerPage({
+    super.key,
+    required this.filePath,
+    required this.title,
+  });
+
+  @override
+  State<TimetablePdfViewerPage> createState() =>
+      _TimetablePdfViewerPageState();
+}
+
+class _TimetablePdfViewerPageState
+    extends State<TimetablePdfViewerPage> {
+  int currentPage = 0;
+  int totalPages = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+        backgroundColor:
+        const Color(0xFF1565C0),
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: "Open / Save PDF",
+            onPressed: () async {
+              await OpenFilex.open(
+                widget.filePath,
+              );
+            },
+          ),
+
+          IconButton(
+            icon: const Icon(Icons.share),
+            tooltip: "Share PDF",
+            onPressed: () async {
+              await SharePlus.instance.share(
+                ShareParams(
+                  files: [
+                    XFile(widget.filePath),
+                  ],
+                  text: "EduMate Class Timetable",
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+
+      body: PDFView(
+        filePath: widget.filePath,
+
+        enableSwipe: true,
+        swipeHorizontal: false,
+
+        autoSpacing: true,
+        pageFling: true,
+
+        onRender: (pages) {
+          if (!mounted) return;
+
+          setState(() {
+            totalPages = pages ?? 0;
+          });
+        },
+
+        onViewCreated: (PDFViewController controller) {
+          // PDF controller is created here.
+        },
+
+        onPageChanged: (page, total) {
+          if (!mounted) return;
+
+          setState(() {
+            currentPage = page ?? 0;
+            totalPages = total ?? 0;
+          });
+        },
+
+        onError: (error) {
+          debugPrint(
+            "PDF VIEW ERROR: $error",
+          );
+        },
+
+        onPageError: (page, error) {
+          debugPrint(
+            "PDF PAGE ERROR: page=$page error=$error",
+          );
+        },
       ),
     );
   }

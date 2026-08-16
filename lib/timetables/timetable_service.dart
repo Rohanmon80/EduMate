@@ -201,26 +201,154 @@ class TimetableService {
     required String department,
     required String section,
   }) async {
+    try {
+      final cleanYear = year.trim();
+      final cleanDepartment = department.trim();
+      final cleanSection = section.trim();
 
-    final id =
-        "${year}_${department}_${section}";
+      final id =
+          "${cleanYear}_${cleanDepartment}_${cleanSection}";
 
-    debugPrint("Searching timetable: $id");
+      debugPrint("====================================");
+      debugPrint("STUDENT TIMETABLE SEARCH");
+      debugPrint("Year       : $cleanYear");
+      debugPrint("Department : $cleanDepartment");
+      debugPrint("Section    : $cleanSection");
+      debugPrint("Document   : $id");
+      debugPrint("====================================");
 
-    final doc = await firestore
-        .collection("timetables")
-        .doc(id)
-        .get();
+      // ---------------------------------------------------------
+      // 1. First try the expected document ID
+      // ---------------------------------------------------------
 
-    debugPrint("Exists: ${doc.exists}");
+      DocumentSnapshot<Map<String, dynamic>> doc =
+      await firestore
+          .collection("timetables")
+          .doc(id)
+          .get();
 
-    if (!doc.exists) {
-      return null;
+      // ---------------------------------------------------------
+      // 2. If not found, search by fields
+      // ---------------------------------------------------------
+
+      if (!doc.exists) {
+        debugPrint(
+          "Timetable document $id not found. "
+              "Trying field-based search...",
+        );
+
+        final query = await firestore
+            .collection("timetables")
+            .where(
+          "year",
+          isEqualTo: cleanYear,
+        )
+            .where(
+          "department",
+          isEqualTo: cleanDepartment,
+        )
+            .where(
+          "section",
+          isEqualTo: cleanSection,
+        )
+            .limit(1)
+            .get();
+
+        if (query.docs.isNotEmpty) {
+          doc = query.docs.first;
+
+          debugPrint(
+            "Timetable found using field search: "
+                "${doc.id}",
+          );
+        }
+      }
+
+      // ---------------------------------------------------------
+      // 3. Still not found
+      // ---------------------------------------------------------
+
+      if (!doc.exists) {
+        debugPrint(
+          "NO TIMETABLE FOUND for "
+              "$cleanYear / $cleanDepartment / $cleanSection",
+        );
+
+        return null;
+      }
+
+      final data =
+      Map<String, dynamic>.from(doc.data() ?? {});
+
+      debugPrint(
+        "Timetable Firestore data: $data",
+      );
+
+      // ---------------------------------------------------------
+      // 4. Make sure fileUrl exists
+      // ---------------------------------------------------------
+
+      String fileUrl =
+      (data["fileUrl"] ?? "").toString().trim();
+
+      // If Firestore doesn't contain fileUrl,
+      // generate it from the known Supabase storage path.
+      if (fileUrl.isEmpty) {
+        final path = storagePath(
+          year: cleanYear,
+          department: cleanDepartment,
+          section: cleanSection,
+        );
+
+        debugPrint(
+          "fileUrl missing. Generating Supabase URL:"
+              "\n$path",
+        );
+
+        fileUrl = supabase.storage
+            .from("timetables")
+            .getPublicUrl(path);
+
+        // Save it back to Firestore so future loads
+        // don't need to generate it again.
+        await firestore
+            .collection("timetables")
+            .doc(doc.id)
+            .set(
+          {
+            "fileUrl": fileUrl,
+            "filePath": path,
+          },
+          SetOptions(merge: true),
+        );
+
+        data["fileUrl"] = fileUrl;
+        data["filePath"] = path;
+      }
+
+      // ---------------------------------------------------------
+      // 5. Return complete timetable
+      // ---------------------------------------------------------
+
+      data["fileUrl"] = fileUrl;
+
+      debugPrint(
+        "FINAL TIMETABLE URL:"
+            "\n$fileUrl",
+      );
+
+      return data;
+    } catch (e, stackTrace) {
+      debugPrint(
+        "TIMETABLE LOAD ERROR: $e",
+      );
+
+      debugPrint(
+        stackTrace.toString(),
+      );
+
+      rethrow;
     }
-
-    debugPrint(doc.data().toString());
-
-    return doc.data();
   }
 
 //---------------------------------------------

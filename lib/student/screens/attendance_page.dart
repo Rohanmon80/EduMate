@@ -26,6 +26,12 @@ class _AttendancePageState extends State<AttendancePage> {
   String academicYear = '';
   String semester = '';
 
+  String studentYear = '';
+  String studentDepartment = '';
+  String studentSection = '';
+  bool attendanceCycleStarted = false;
+  String attendanceStatusMessage = '';
+
   double semesterPercentage = 0;
   double cyclePercentage = 0;
 
@@ -46,6 +52,8 @@ class _AttendancePageState extends State<AttendancePage> {
 
     setState(() {
       loading = true;
+      attendanceCycleStarted = false;
+      attendanceStatusMessage = '';
     });
 
     try {
@@ -80,9 +88,98 @@ class _AttendancePageState extends State<AttendancePage> {
               data['currentSemester']?.toString() ??
               '';
 
-      // If the profile has no semester information, try the most
-      // recent attendance record for this student.
-      if (academicYear.isEmpty || semester.isEmpty) {
+      studentYear = data['year']?.toString() ?? '';
+      studentDepartment =
+          data['department']?.toString() ??
+              data['branch']?.toString() ??
+              data['course']?.toString() ??
+              '';
+      studentSection = data['section']?.toString() ?? '';
+
+      Map<String, dynamic>? config;
+
+      // 1. If the student's profile already contains academicYear + semester,
+      //    check the exact attendance_config document first.
+      if (academicYear.isNotEmpty && semester.isNotEmpty) {
+        final configDoc = await firestore
+            .collection('attendance_config')
+            .doc('${academicYear}_$semester')
+            .get();
+
+        if (configDoc.exists) {
+          config = configDoc.data();
+        }
+      }
+
+      // 2. If the profile does not have the current academic year/semester,
+      //    find the configuration belonging to this student's year/department/
+      //    section. We intentionally do not use orderBy here, so this does not
+      //    require an extra composite index.
+      if (config == null && studentYear.isNotEmpty) {
+        Query<Map<String, dynamic>> query = firestore
+            .collection('attendance_config')
+            .where('year', isEqualTo: studentYear);
+
+        if (studentDepartment.isNotEmpty) {
+          query = query.where(
+            'department',
+            isEqualTo: studentDepartment,
+          );
+        }
+
+        if (studentSection.isNotEmpty) {
+          query = query.where(
+            'section',
+            isEqualTo: studentSection,
+          );
+        }
+
+        final snapshot = await query.limit(20).get();
+
+        if (snapshot.docs.isNotEmpty) {
+          // Prefer an active configuration. If none is active, use the
+          // configuration with the latest startedAt value so the UI can
+          // still identify the student's current academic year/semester.
+          QueryDocumentSnapshot<Map<String, dynamic>>? selected;
+          DateTime? selectedStartedAt;
+
+          for (final doc in snapshot.docs) {
+            final item = doc.data();
+
+            if (item['active'] == true) {
+              selected = doc;
+              break;
+            }
+
+            final rawStartedAt = item['startedAt'];
+            DateTime? startedAt;
+
+            if (rawStartedAt is Timestamp) {
+              startedAt = rawStartedAt.toDate();
+            } else if (rawStartedAt is DateTime) {
+              startedAt = rawStartedAt;
+            } else if (rawStartedAt is String) {
+              startedAt = DateTime.tryParse(rawStartedAt);
+            }
+
+            if (selected == null ||
+                (startedAt != null &&
+                    (selectedStartedAt == null ||
+                        startedAt.isAfter(selectedStartedAt!)))) {
+              selected = doc;
+              selectedStartedAt = startedAt;
+            }
+          }
+
+          selected ??= snapshot.docs.first;
+          config = selected.data();
+        }
+      }
+
+      // 3. Last fallback: use the most recent attendance history record.
+      //    This only helps identify the year/semester; it does not mean the
+      //    attendance cycle is started.
+      if ((academicYear.isEmpty || semester.isEmpty) && config == null) {
         final latest = await firestore
             .collection('attendance_history')
             .where(
@@ -109,61 +206,107 @@ class _AttendancePageState extends State<AttendancePage> {
         }
       }
 
-      if (academicYear.isEmpty || semester.isEmpty) {
-        semesterSummary = {
-          'percentage': 0.0,
-          'scheduledHours': 0.0,
-          'presentHours': 0.0,
-          'absentHours': 0.0,
-          'isStarted': false,
-        };
-        cycleSummary = {
-          'percentage': 0.0,
-          'scheduledHours': 0.0,
-          'presentHours': 0.0,
-          'absentHours': 0.0,
-          'cycleNumber': 0,
-        };
-        subjectSummaries = [];
-        recentHistory = [];
-        return;
+      // Use the configuration as the source of truth when it contains the
+      // academic year and semester.
+      if (config != null) {
+        final configYear = config['academicYear']?.toString() ?? '';
+        final configSemester = config['semester']?.toString() ?? '';
+
+        if (configYear.isNotEmpty) academicYear = configYear;
+        if (configSemester.isNotEmpty) semester = configSemester;
+
+        attendanceCycleStarted = config['active'] == true;
+
+        if (!attendanceCycleStarted) {
+          final yearText = academicYear.isEmpty
+              ? (studentYear.isEmpty ? 'your year' : studentYear)
+              : academicYear;
+
+          final semesterText = semester.isEmpty
+              ? ''
+              : ' (Semester $semester)';
+
+          attendanceStatusMessage =
+          'Admin has not started the attendance cycle for '
+              '$yearText$semesterText yet.';
+        }
+      } else if (academicYear.isNotEmpty && semester.isNotEmpty) {
+        // The profile knows the student's academic period, but Admin has not
+        // created/started a matching attendance configuration yet.
+        attendanceCycleStarted = false;
+        attendanceStatusMessage =
+        'Admin has not started the attendance cycle for '
+            '$academicYear (Semester $semester) yet.';
+      } else {
+        attendanceCycleStarted = false;
+        final yearText = studentYear.isEmpty ? 'your year' : studentYear;
+        attendanceStatusMessage =
+        'Admin has not started the attendance cycle for $yearText yet.';
       }
 
-      semesterSummary =
-      await attendanceService.getSemesterSummary(
-        studentId: studentId,
-        academicYear: academicYear,
-        semester: semester,
-      );
+      // Always keep the page usable. When the cycle is not started, show the
+      // normal attendance UI with zero/empty data instead of replacing it
+      // with a blocking "configuration pending" screen.
+      semesterSummary = {
+        'percentage': 0.0,
+        'scheduledHours': 0.0,
+        'presentHours': 0.0,
+        'absentHours': 0.0,
+        'isStarted': attendanceCycleStarted,
+      };
 
-      cycleSummary =
-      await attendanceService.getCurrentCycleSummary(
-        studentId: studentId,
-        academicYear: academicYear,
-        semester: semester,
-      );
+      cycleSummary = {
+        'percentage': 0.0,
+        'scheduledHours': 0.0,
+        'presentHours': 0.0,
+        'absentHours': 0.0,
+        'cycleNumber': 0,
+      };
 
-      semesterPercentage =
-          _number(semesterSummary['percentage']);
+      semesterPercentage = 0;
+      cyclePercentage = 0;
+      subjectSummaries = [];
+      recentHistory = [];
 
-      cyclePercentage =
-          _number(cycleSummary['percentage']);
+      if (attendanceCycleStarted &&
+          academicYear.isNotEmpty &&
+          semester.isNotEmpty) {
+        semesterSummary =
+        await attendanceService.getSemesterSummary(
+          studentId: studentId,
+          academicYear: academicYear,
+          semester: semester,
+        );
 
-      subjectSummaries =
-      await attendanceService.getSubjectSummaries(
-        studentId: studentId,
-        academicYear: academicYear,
-        semester: semester,
-      );
+        cycleSummary =
+        await attendanceService.getCurrentCycleSummary(
+          studentId: studentId,
+          academicYear: academicYear,
+          semester: semester,
+        );
 
-      final history =
-      await attendanceService.getAttendanceHistory(
-        studentId: studentId,
-        academicYear: academicYear,
-        semester: semester,
-      );
+        semesterPercentage =
+            _number(semesterSummary['percentage']);
 
-      recentHistory = history.reversed.take(5).toList();
+        cyclePercentage =
+            _number(cycleSummary['percentage']);
+
+        subjectSummaries =
+        await attendanceService.getSubjectSummaries(
+          studentId: studentId,
+          academicYear: academicYear,
+          semester: semester,
+        );
+
+        final history =
+        await attendanceService.getAttendanceHistory(
+          studentId: studentId,
+          academicYear: academicYear,
+          semester: semester,
+        );
+
+        recentHistory = history.reversed.take(5).toList();
+      }
     } catch (e) {
       if (mounted) {
         _showMessage(
@@ -177,6 +320,15 @@ class _AttendancePageState extends State<AttendancePage> {
           loading = false;
           refreshing = false;
         });
+
+        if (!attendanceCycleStarted &&
+            attendanceStatusMessage.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _showWarningMessage(attendanceStatusMessage);
+            }
+          });
+        }
       }
     }
   }
@@ -245,6 +397,19 @@ class _AttendancePageState extends State<AttendancePage> {
     );
   }
 
+  void _showWarningMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange.shade800,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   Future<void> refresh() async {
     if (refreshing) return;
 
@@ -301,19 +466,18 @@ class _AttendancePageState extends State<AttendancePage> {
               _buildHeader(),
               const SizedBox(height: 16),
 
-              if (academicYear.isEmpty || semester.isEmpty)
-                _buildMissingConfiguration()
-              else ...[
-                _buildPercentageCards(),
-                const SizedBox(height: 18),
-                _buildSemesterDetails(),
-                const SizedBox(height: 22),
-                _buildWeeklyGraph(),
-                const SizedBox(height: 25),
-                _buildSubjectAttendance(),
-                const SizedBox(height: 25),
-                _buildRecentAttendance(),
-              ],
+              if (!attendanceCycleStarted &&
+                  attendanceStatusMessage.isNotEmpty)
+                _buildCycleNotStartedNotice(),
+              _buildPercentageCards(),
+              const SizedBox(height: 18),
+              _buildSemesterDetails(),
+              const SizedBox(height: 22),
+              _buildWeeklyGraph(),
+              const SizedBox(height: 25),
+              _buildSubjectAttendance(),
+              const SizedBox(height: 25),
+              _buildRecentAttendance(),
             ],
           ),
         ),
@@ -388,38 +552,63 @@ class _AttendancePageState extends State<AttendancePage> {
     );
   }
 
-  Widget _buildMissingConfiguration() {
+  Widget _buildCycleNotStartedNotice() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
+      margin: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: isDark
             ? const Color(0xFF16213E)
-            : Colors.white,
+            : const Color(0xFFFFF8E1),
         borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: Colors.orange.withOpacity(.35),
+        ),
       ),
-      child: const Column(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline,
-            size: 42,
-            color: Colors.orange,
-          ),
-          SizedBox(height: 10),
-          Text(
-            'Attendance configuration is pending.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 17,
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.info_outline_rounded,
+              color: Colors.orange,
+              size: 25,
             ),
           ),
-          SizedBox(height: 6),
-          Text(
-            'Your Admin needs to start attendance calculation '
-                'and your profile must contain the current academic year '
-                'and semester.',
-            textAlign: TextAlign.center,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Attendance cycle not started',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: isDark
+                        ? Colors.white
+                        : const Color(0xFF6B4E00),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  attendanceStatusMessage,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: isDark
+                        ? Colors.white70
+                        : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
