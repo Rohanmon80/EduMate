@@ -1,6 +1,8 @@
 import 'dart:ui';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
 import '../../main.dart';
 
 class AdminFeeManagementPage extends StatefulWidget {
@@ -345,52 +347,13 @@ class _AdminFeeManagementPageState
                           isDark:
                           isDark,
 
-                          student:{
-
-                            "name":
-
-                            student[
-                            "name"]
-
-                                ??
-
-                                "",
-
-                            "roll":
-
-                            student[
-                            "rollNumber"]
-
-                                ??
-
-                                "",
-
-                            "paid":
-
-                            student[
-                            "paidFee"]
-
-                                ??
-
-                                0,
-
-                            "total":
-
-                            student[
-                            "totalFee"]
-
-                                ??
-
-                                0,
-
-                            "feesDue":
-
-                            student[
-                            "feesDue"]
-
-                                ??
-
-                                0,
+                          student: {
+                            "studentId": doc.id,
+                            "name": student["name"] ?? "",
+                            "roll": student["rollNumber"] ?? "",
+                            "paid": student["paidFee"] ?? 0,
+                            "total": student["totalFee"] ?? 0,
+                            "feesDue": student["feesDue"] ?? 0,
                           },
                         );
                       },
@@ -576,93 +539,40 @@ class _AdminFeeManagementPageState
               onPressed:
                   () async {
 
-                double total =
+                    double total =
+                    double.parse(feeController.text);
 
-                double.parse(
-                    feeController.text);
+                    final studentRef = FirebaseFirestore
+                        .instance
+                        .collection("users")
+                        .doc(student["studentId"]);
 
-                await FirebaseFirestore
-                    .instance
+                    final studentDoc =
+                    await studentRef.get();
 
-                    .collection(
-                    "users")
-
-                    .where(
-
-                    "rollNumber",
-
-                    isEqualTo:
-
-                    student[
-                    "roll"])
-
-                    .get()
-
-                    .then(
-                      (v){
-
-                    if(
-                    v.docs
-                        .isNotEmpty
-                    ){
-
-                      double currentPaid =
-
-                          (v.docs.first.data()
-
-                          as Map<
-                              String,
-                              dynamic>)
-
-                          ["paidFee"]
-
-                              ??
-
-                              0;
-
-                      double remaining =
-
-                          total -
-                              currentPaid;
-
-                      if(
-                      remaining < 0
-                      ){
-
-                        remaining = 0;
-                      }
-
-                      v.docs.first.reference.update({
-
-                        "totalFee":
-                        total,
-
-                        "feesDue":
-                        remaining,
-                      });
-
-                          if(
-                          remaining < 0
-                      ){
-
-                        remaining = 0;
-                      }
-
-                      v.docs.first.reference.update({
-
-                        "totalFee":
-                        total,
-
-                        "feesDue":
-                        remaining,
-                      });
-
+                    if (!studentDoc.exists) {
+                      Navigator.pop(context);
+                      return;
                     }
-                  },
-                );
 
-                Navigator.pop(
-                    context);
+                    final data = studentDoc.data()!;
+
+                    double currentPaid =
+                    (data["paidFee"] ?? 0).toDouble();
+
+                    double remaining =
+                        total - currentPaid;
+
+                    if (remaining < 0) {
+                      remaining = 0;
+                    }
+
+                    await studentRef.update({
+                      "totalFee": total,
+                      "feesDue": remaining,
+                    });
+
+                    Navigator.pop(context);
               },
 
               child:
@@ -870,44 +780,18 @@ class _AdminFeeManagementPageState
                           amountController.text,
                         );
 
-                        var v =
+                        final studentRef = FirebaseFirestore.instance
+                            .collection("users")
+                            .doc(student["studentId"]);
 
-                        await FirebaseFirestore
-                            .instance
+                        final studentDoc = await studentRef.get();
 
-                            .collection(
-                          "users",
-                        )
-
-                            .where(
-
-                          "rollNumber",
-
-                          isEqualTo:
-
-                          student[
-                          "roll"
-                          ],
-
-                        )
-
-                            .get();
-
-                        if(
-                        v.docs.isEmpty
-                        ){
-
-                          Navigator.pop(
-                            context,
-                          );
-
+                        if (!studentDoc.exists) {
+                          Navigator.pop(context);
                           return;
                         }
 
-                        var data =
-
-                        v.docs.first
-                            .data();
+                        final data = studentDoc.data()!;
 
                         double currentPaid =
 
@@ -959,10 +843,7 @@ class _AdminFeeManagementPageState
                           remaining = 0;
                         }
 
-                        await v.docs.first
-                            .reference
-
-                            .update({
+                        await studentRef.update({
 
                           "paidFee":
                           newPaid,
@@ -971,63 +852,31 @@ class _AdminFeeManagementPageState
                           remaining,
                         });
 
-                        await FirebaseFirestore
-                            .instance
-
-                            .collection(
-                          "fee_receipts",
-                        )
-
+                        await FirebaseFirestore.instance
+                            .collection("fee_receipts")
                             .add({
+                          "studentId": student["studentId"],
+                          "rollNumber": student["roll"],
 
-                          "rollNumber":
+                          "title": titleController.text,
 
-                          student[
-                          "roll"
-                          ],
-
-                          "title":
-
-                          titleController
-                              .text,
-
-                          "amount":
-                          paidNow,
+                          "amount": paidNow,
 
                           "status":
-
                           remaining <= 0
-
-                              ?
-
-                          "PAID"
-
-                              :
-
-                          "PENDING",
+                              ? "PAID"
+                              : "PENDING",
 
                           "date":
-
                           DateTime.now()
-
                               .toString()
-
-                              .substring(
-                            0,
-                            10,
-                          ),
+                              .substring(0, 10),
 
                           "paymentMode":
-
-                          modeController
-                              .text,
+                          modeController.text,
 
                           "transactionId":
-
-                          transactionController
-                              .text,
-
-                          "receiptUrl":"",
+                          transactionController.text,
 
                           "pending":
                           remaining,

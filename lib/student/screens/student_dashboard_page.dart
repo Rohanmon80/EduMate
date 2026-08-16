@@ -9,9 +9,71 @@ import 'attendance_page.dart';
 import 'notices_page.dart';
 import 'results_page.dart';
 import 'marks_details_page.dart';
+import '../../services/attendance_service.dart';
 
-class StudentDashboardPage extends StatelessWidget {
+class StudentDashboardPage extends StatefulWidget {
   const StudentDashboardPage({super.key});
+
+  @override
+  State<StudentDashboardPage> createState() =>
+      _StudentDashboardPageState();
+}
+
+class _StudentDashboardPageState
+    extends State<StudentDashboardPage> {
+
+  final AttendanceService _attendanceService =
+  AttendanceService();
+
+  Future<double> _getStudentAttendance(
+      Map<String, dynamic> user,
+      ) async {
+    final studentId =
+        FirebaseAuth.instance.currentUser?.uid;
+
+    if (studentId == null) {
+      return 0.0;
+    }
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection("attendance")
+          .where(
+        "studentId",
+        isEqualTo: studentId,
+      )
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        return 0.0;
+      }
+
+      int totalClasses = 0;
+      int attendedClasses = 0;
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+
+        totalClasses++;
+
+        if (data["present"] == true) {
+          attendedClasses++;
+        }
+      }
+
+      if (totalClasses == 0) {
+        return 0.0;
+      }
+
+      return (attendedClasses / totalClasses) * 100;
+    } catch (e) {
+      debugPrint(
+        "Dashboard attendance error: $e",
+      );
+
+      return 0.0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +136,11 @@ class StudentDashboardPage extends StatelessWidget {
             as Map<
                 String,
                 dynamic>;
+            debugPrint("STUDENT DASHBOARD DATA:");
+            debugPrint("Student UID: ${data.id}");
+            debugPrint("Total Fee: ${user["totalFee"]}");
+            debugPrint("Paid Fee: ${user["paidFee"]}");
+            debugPrint("Fees Due: ${user["feesDue"]}");
 
             final studentName = data["name"].toString();
 
@@ -521,13 +588,28 @@ class StudentDashboardPage extends StatelessWidget {
 
                       Expanded(
                         child:
-                        statCard(
-                          title:
-                          "Attendance",
-                          value:
-                          "${user["attendance"] ?? 0}%",
-                          color:
-                          Colors.green,
+                        FutureBuilder<double>(
+                          future: _getStudentAttendance(user),
+                          builder: (context, attendanceSnapshot) {
+                            if (attendanceSnapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return statCard(
+                                title: "Attendance",
+                                value: "...",
+                                color: Colors.green,
+                              );
+                            }
+
+                            final attendance =
+                                attendanceSnapshot.data ?? 0.0;
+
+                            return statCard(
+                              title: "Attendance",
+                              value:
+                              "${attendance.toStringAsFixed(1)}%",
+                              color: Colors.green,
+                            );
+                          },
                         ),
                       ),
 
@@ -577,7 +659,7 @@ class StudentDashboardPage extends StatelessWidget {
                         child:
                         statCard(
                           title:
-                          "Fees",
+                          "Fees Due",
                           value:
 
                           "₹${user["feesDue"] ?? 0}",
@@ -786,7 +868,7 @@ class StudentDashboardPage extends StatelessWidget {
                           "Attendance Updated",
 
                           subtitle:
-                          "Current attendance ${data["attendance"]}%",
+                          "Current attendance is calculated from your attendance records",
 
                           color:
                           Colors.green,

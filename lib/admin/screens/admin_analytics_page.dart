@@ -34,21 +34,10 @@ class AdminAnalyticsPage extends StatelessWidget {
         StreamBuilder<QuerySnapshot>(
 
           stream:
-
-          FirebaseFirestore
-              .instance
-
-              .collection(
-            "fee_receipts",
-          )
-
-              .where(
-            "status",
-            isEqualTo:
-            "paid",
-          )
-
-              .snapshots(),
+            FirebaseFirestore
+            .instance
+            .collection("fee_receipts")
+            .snapshots(),
 
           builder:
               (
@@ -67,132 +56,99 @@ class AdminAnalyticsPage extends StatelessWidget {
               );
             }
 
-            final docs =
-                snapshot.data!.docs;
+            final docs = snapshot.data!.docs;
 
-            DateTime now =
-            DateTime.now();
+            final now = DateTime.now();
 
+            double totalAmount = 0;
             double todayAmount = 0;
-
             double weekAmount = 0;
-
             double monthAmount = 0;
 
-            int todayStudents = 0;
+            final Set<String> todayStudents = {};
+            final Set<String> weekStudents = {};
+            final Set<String> monthStudents = {};
 
-            int weekStudents = 0;
 
-            int monthStudents = 0;
-
-            for(
-            var doc
-            in docs
-            ){
-
+            for (final doc in docs) {
               final data =
+              doc.data() as Map<String, dynamic>;
 
-              doc.data()
+              // Get payment amount
+              final rawAmount = data["amount"];
 
-              as Map<
-                  String,
-                  dynamic>;
+              double amount = 0;
 
-              if(
-              data[
-              "timestamp"
-              ] == null
-              ) continue;
-
-              DateTime date =
-
-              (
-                  data[
-                  "timestamp"
-                  ]
-
-                  as Timestamp
-
-              )
-
-                  .toDate();
-
-              double amount =
-
-              (
-                  data[
-                  "amount"
-                  ]
-
-                      ?? 0
-
-              )
-
-                  .toDouble();
-
-              if(
-
-              date.year
-                  ==
-                  now.year
-
-                  &&
-
-                  date.month
-                      ==
-                      now.month
-
-                  &&
-
-                  date.day
-                      ==
-                      now.day
-
-              ){
-
-                todayAmount +=
-                    amount;
-
-                todayStudents++;
+              if (rawAmount is num) {
+                amount = rawAmount.toDouble();
+              } else {
+                amount = double.tryParse(
+                  rawAmount?.toString() ?? "",
+                ) ??
+                    0;
               }
 
-              if(
-
-              now
-                  .difference(
-                date,
-              )
-
-                  .inDays
-
-                  <= 7
-
-              ){
-
-                weekAmount +=
-                    amount;
-
-                weekStudents++;
+              // Ignore invalid/zero payments
+              if (amount <= 0) {
+                continue;
               }
 
-              if(
+              // All-time collection
+              totalAmount += amount;
 
-              date.year
-                  ==
-                  now.year
+              // Get receipt date
+              DateTime? date;
 
-                  &&
+              final rawDate = data["date"];
 
-                  date.month
-                      ==
-                      now.month
+              if (rawDate is Timestamp) {
+                date = rawDate.toDate();
+              } else if (rawDate is String) {
+                date = DateTime.tryParse(rawDate);
+              }
 
-              ){
+              if (date == null) {
+                continue;
+              }
 
-                monthAmount +=
-                    amount;
+              final receiptDate = DateTime(
+                date.year,
+                date.month,
+                date.day,
+              );
 
-                monthStudents++;
+              final today = DateTime(
+                now.year,
+                now.month,
+                now.day,
+              );
+
+              final difference =
+                  today.difference(receiptDate).inDays;
+
+              final studentId =
+                  data["studentId"]?.toString() ??
+                      data["rollNumber"]?.toString() ??
+                      doc.id;
+
+              // Today
+              if (difference == 0) {
+                todayAmount += amount;
+                todayStudents.add(studentId);
+              }
+
+              // Last 7 days
+              if (difference >= 0 &&
+                  difference < 7) {
+                weekAmount += amount;
+                weekStudents.add(studentId);
+              }
+
+              // Current month
+              if (date.year == now.year &&
+                  date.month == now.month) {
+                monthAmount += amount;
+                monthStudents.add(studentId);
               }
             }
 
@@ -371,6 +327,13 @@ class AdminAnalyticsPage extends StatelessWidget {
 
                         Colors.orange,
                       ),
+                      analyticsCard(
+                        isDark,
+                        "Total Collection",
+                        "₹${totalAmount.toInt()}",
+                        Icons.account_balance_wallet,
+                        Colors.teal,
+                      ),
 
                       analyticsCard(
 
@@ -378,14 +341,14 @@ class AdminAnalyticsPage extends StatelessWidget {
 
                         "Paid Students",
 
-                        monthStudents
-                            .toString(),
+                        monthStudents.length.toString(),
 
                         Icons.people,
 
                         Colors.purple,
                       ),
                     ],
+
                   ),
 
                   const SizedBox(
@@ -406,8 +369,7 @@ class AdminAnalyticsPage extends StatelessWidget {
 
                           "Today Paid Students",
 
-                          todayStudents
-                              .toString(),
+                            todayStudents.length.toString()
                         ),
 
                         summaryRow(
@@ -416,8 +378,7 @@ class AdminAnalyticsPage extends StatelessWidget {
 
                           "Week Paid Students",
 
-                          weekStudents
-                              .toString(),
+                            weekStudents.length.toString()
                         ),
 
                         summaryRow(
@@ -426,7 +387,7 @@ class AdminAnalyticsPage extends StatelessWidget {
 
                           "Month Paid Students",
 
-                          monthStudents
+                          monthStudents.length
                               .toString(),
                         ),
 
