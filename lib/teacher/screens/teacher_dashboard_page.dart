@@ -1,3 +1,4 @@
+
 import 'dart:ui';
 import '../../timetables/timetable_upload_page.dart';
 import 'package:flutter/material.dart';
@@ -252,29 +253,29 @@ class TeacherDashboardPage extends StatelessWidget {
 
 
 
-                    CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Colors.blue,
-                      backgroundImage:
-                      teacher.containsKey("photoUrl") &&
-                          teacher["photoUrl"] != null &&
-                          teacher["photoUrl"] != ""
-                          ? NetworkImage(teacher["photoUrl"])
-                          : null,
-                      child:
-                      !teacher.containsKey("photoUrl") ||
-                          teacher["photoUrl"] == null ||
-                          teacher["photoUrl"] == ""
-                          ? Text(
-                        teacher["name"]
-                            .substring(0, 2)
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        CircleAvatar(
+                          radius: 40,
+                          backgroundColor: Colors.blue,
+                          backgroundImage:
+                          teacher.containsKey("photoUrl") &&
+                              teacher["photoUrl"] != null &&
+                              teacher["photoUrl"] != ""
+                              ? NetworkImage(teacher["photoUrl"])
+                              : null,
+                          child:
+                          !teacher.containsKey("photoUrl") ||
+                              teacher["photoUrl"] == null ||
+                              teacher["photoUrl"] == ""
+                              ? Text(
+                            teacher["name"]
+                                .substring(0, 2)
+                                .toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                            ),
+                          )
+                              : null,
                         ),
-                      )
-                          : null,
-                    ),
 
                         const SizedBox(
                           width: 18,
@@ -291,7 +292,7 @@ class TeacherDashboardPage extends StatelessWidget {
                             children: [
 
                               Text(
-                          teacher["name"].toString(),
+                                teacher["name"].toString(),
 
                                 style:
                                 TextStyle(
@@ -331,92 +332,128 @@ class TeacherDashboardPage extends StatelessWidget {
                 height: 25,
               ),
 
-              Row(
 
-                children: [
-
-                  Expanded(
-                    child:
-                    statCard(
+              // DYNAMIC DASHBOARD STATS
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection("teachers")
+                    .doc(FirebaseAuth.instance.currentUser!.uid)
+                    .snapshots(),
+                builder: (context, teacherSnapshot) {
+                  if (!teacherSnapshot.hasData ||
+                      !teacherSnapshot.data!.exists) {
+                    return _statsRow(
                       context,
-                      "Classes",
-                      "12",
-                    ),
-                  ),
+                      teacherUid: FirebaseAuth.instance.currentUser!.uid,
+                      teacherId: "",
+                      classes: 0,
+                      subjects: 0,
+                      loading: true,
+                    );
+                  }
 
-                  const SizedBox(
-                    width: 12,
-                  ),
+                  final teacherData =
+                  teacherSnapshot.data!.data() as Map<String, dynamic>;
 
-                  Expanded(
+                  final teacherUid =
+                      FirebaseAuth.instance.currentUser!.uid;
 
-                    child:
+                  final teacherId =
+                  (teacherData["id"] ?? "").toString().trim();
 
-                    StreamBuilder<QuerySnapshot>(
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection("timetables")
+                        .snapshots(),
+                    builder: (context, timetableSnapshot) {
+                      int classCount = 0;
+                      final Set<String> subjects = <String>{};
 
-                      stream:
+                      if (timetableSnapshot.hasData) {
+                        for (final document in timetableSnapshot.data!.docs) {
+                          final data = document.data();
+                          if (data is! Map<String, dynamic>) continue;
 
-                      FirebaseFirestore
-                          .instance
+                          final schedule = data["schedule"];
+                          if (schedule is! Map) continue;
 
-                          .collection(
-                        "users",
-                      )
-                          .where("role", isEqualTo: "student")
+                          for (final dayEntry in schedule.entries) {
+                            final periods = dayEntry.value;
+                            if (periods is! List) continue;
 
-                          .snapshots(),
+                            for (final period in periods) {
+                              if (period is! Map) continue;
 
-                      builder:
-                          (
-                          context,
-                          snapshot,
-                          ){
+                              final p = Map<String, dynamic>.from(period);
+                              bool assigned = false;
 
-                        if(
-                        !snapshot.hasData
-                        ){
+                              final uid =
+                              (p["teacherUid"] ?? "").toString().trim();
+                              final id =
+                              (p["teacherId"] ?? "").toString().trim();
 
-                          return statCard(
+                              if (uid == teacherUid ||
+                                  (teacherId.isNotEmpty && id == teacherId)) {
+                                assigned = true;
+                              }
 
-                            context,
+                              final uids = p["teacherUids"];
+                              if (uids is List &&
+                                  uids.map((e) => e.toString()).contains(teacherUid)) {
+                                assigned = true;
+                              }
 
-                            "Students",
+                              final ids = p["teacherIds"];
+                              if (ids is List &&
+                                  teacherId.isNotEmpty &&
+                                  ids.map((e) => e.toString()).contains(teacherId)) {
+                                assigned = true;
+                              }
 
-                            "...",
-                          );
+                              if (uids is String &&
+                                  uids.split(",").map((e) => e.trim()).contains(teacherUid)) {
+                                assigned = true;
+                              }
+
+                              if (ids is String &&
+                                  teacherId.isNotEmpty &&
+                                  ids.split(",").map((e) => e.trim()).contains(teacherId)) {
+                                assigned = true;
+                              }
+
+                              if (!assigned) continue;
+
+                              classCount++;
+
+                              final subject = (p["subject"] ??
+                                  p["subjectName"] ??
+                                  p["subjectCode"] ??
+                                  "")
+                                  .toString()
+                                  .trim();
+
+                              if (subject.isNotEmpty) {
+                                subjects.add(subject);
+                              }
+                            }
+                          }
                         }
+                      }
 
-                        int totalStudents =
-
-                            snapshot.data!.docs.length;
-
-                        return statCard(
-
-                          context,
-
-                          "Students",
-
-                          totalStudents
-                              .toString(),
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(
-                    width: 12,
-                  ),
-
-                  Expanded(
-                    child:
-                    statCard(
-                      context,
-                      "Subjects",
-                      "4",
-                    ),
-                  ),
-                ],
+                      return _statsRow(
+                        context,
+                        teacherUid: teacherUid,
+                        teacherId: teacherId,
+                        classes: classCount,
+                        subjects: subjects.length,
+                        loading: !timetableSnapshot.hasData,
+                      );
+                    },
+                  );
+                },
               ),
+
+
 
               const SizedBox(
                 height: 30,
@@ -506,7 +543,7 @@ class TeacherDashboardPage extends StatelessWidget {
                           builder:
                               (_)=>
 
-                              const TeacherNoticePage(),
+                          const TeacherNoticePage(),
                         ),
                       );
                     },
@@ -538,7 +575,7 @@ class TeacherDashboardPage extends StatelessWidget {
                           builder:
                               (_)=>
 
-                              const TeacherMaterialUploadPage(),
+                          const TeacherMaterialUploadPage(),
                         ),
                       );
                     },
@@ -620,7 +657,7 @@ class TeacherDashboardPage extends StatelessWidget {
                               (_)=>
 
 
-                              const AnalyticsPage(),
+                          const AnalyticsPage(),
                         ),
                       );
                     },
@@ -648,6 +685,55 @@ class TeacherDashboardPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _statsRow(
+      BuildContext context, {
+        required String teacherUid,
+        required String teacherId,
+        required int classes,
+        required int subjects,
+        required bool loading,
+      }) {
+    return Row(
+      children: [
+        Expanded(
+          child: statCard(
+            context,
+            "Classes",
+            loading ? "..." : classes.toString(),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection("users")
+                .where("role", isEqualTo: "student")
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return statCard(context, "Students", "...");
+              }
+
+              return statCard(
+                context,
+                "Students",
+                snapshot.data!.docs.length.toString(),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: statCard(
+            context,
+            "Subjects",
+            loading ? "..." : subjects.toString(),
+          ),
+        ),
+      ],
     );
   }
 

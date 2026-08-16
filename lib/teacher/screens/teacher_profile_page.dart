@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'dart:io';
-
+import '../../settings/privacy_security_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -684,28 +684,13 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
             context,
           ).showSnackBar(const SnackBar(content: Text("Notifications Opened")));
         }
-        /// PRIVACY
+        /// PRIVACY & SECURITY
         else if (title == "Privacy & Security") {
-          showDialog(
-            context: context,
-
-            builder: (_) {
-              return AlertDialog(
-                title: const Text("Privacy & Security"),
-
-                content: const Text("Security settings page here."),
-
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-
-                    child: const Text("Close"),
-                  ),
-                ],
-              );
-            },
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const PrivacySecurityPage(),
+            ),
           );
         }
       },
