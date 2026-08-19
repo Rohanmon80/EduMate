@@ -8,7 +8,7 @@ import 'mark_attendance_page.dart';
 import 'notice_panel_page.dart';
 import 'materials_upload_page.dart';
 import 'teacher_marks_page.dart';
-import 'analytics_page.dart';
+import 'TeacherPptViewPage.dart';
 import '../../common/screens/ai_assistant_page.dart';
 import '../../common/screens/bus_tracking_page.dart';
 import '../../common/screens/campus_map_page.dart';
@@ -657,7 +657,7 @@ class TeacherDashboardPage extends StatelessWidget {
                               (_)=>
 
 
-                          const AnalyticsPage(),
+                          const TeacherPptViewPage(),
                         ),
                       );
                     },
@@ -668,9 +668,9 @@ class TeacherDashboardPage extends StatelessWidget {
 
                       context,
 
-                      "Analytics",
+                      "PPT",
 
-                      Icons.analytics,
+                      Icons.slideshow,
 
                       Colors.teal,
                     ),

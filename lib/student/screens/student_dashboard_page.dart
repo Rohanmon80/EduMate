@@ -8,6 +8,7 @@ import '../../main.dart';
 import 'attendance_page.dart';
 import 'notices_page.dart';
 import 'results_page.dart';
+import 'student_ppt_upload_page.dart';
 import 'marks_details_page.dart';
 import '../../services/attendance_service.dart';
 
@@ -759,6 +760,14 @@ class _StudentDashboardPageState
                         color: Colors.purple,
                         isDark: isDark,
                         page: const NoticesPage(),
+                      ),
+                      quickCard(
+                        context: context,
+                        title: "Submit PPT",
+                        icon: Icons.present_to_all,
+                        color: Colors.red,
+                        isDark: isDark,
+                        page: const StudentPptUploadPage(),
                       ),
                     ],
                   ),

@@ -41,8 +41,6 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
   List<Map<String, dynamic>> todayClasses = [];
   List<QueryDocumentSnapshot<Map<String, dynamic>>> students = [];
 
-  final TextEditingController searchController = TextEditingController();
-
   final Map<String, bool> attendance = {};
 
   DateTime selectedDate = DateTime.now();
@@ -79,21 +77,6 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
     return null;
   }
 
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> get filteredStudents {
-    final search = searchController.text.trim().toLowerCase();
-
-    if (search.isEmpty) return students;
-
-    return students.where((doc) {
-      final data = doc.data();
-
-      final name = data['name']?.toString().toLowerCase() ?? '';
-      final roll = data['rollNumber']?.toString().toLowerCase() ?? '';
-
-      return name.contains(search) || roll.contains(search);
-    }).toList();
-  }
-
   // ---------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------
@@ -105,7 +88,6 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
 
   @override
   void dispose() {
-    searchController.dispose();
     super.dispose();
   }
 
@@ -164,6 +146,29 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
     );
   }
 
+  bool _isCurrentClass(Map<String, dynamic> classInfo) {
+    final start = _timeToMinutes(classInfo['startTime']?.toString() ?? '');
+    final end = _timeToMinutes(classInfo['endTime']?.toString() ?? '');
+    if (start == 999999 || end == 999999) return false;
+
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+    return currentMinutes >= start && currentMinutes < end;
+  }
+
+  Map<String, dynamic>? _findCurrentClass(List<Map<String, dynamic>> classes) {
+    for (final classInfo in classes) {
+      if (_isCurrentClass(classInfo)) return classInfo;
+    }
+    return null;
+  }
+
+  Future<void> _autoOpenCurrentClass() async {
+    final current = _findCurrentClass(todayClasses);
+    if (current == null) return;
+    await loadStudentsForClass(current);
+  }
+
   // ---------------------------------------------------------------------
   // Data loading
   // ---------------------------------------------------------------------
@@ -219,6 +224,15 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       );
 
       todayClasses = classes;
+
+      // Automatically open the timetable period that is happening now.
+      // If there is no active period, the teacher can tap any assigned class.
+      final currentClass = _findCurrentClass(todayClasses);
+      if (currentClass != null) {
+        // Do not block the class list from rendering; load the roster after
+        // the timetable has been assigned.
+        await _autoOpenCurrentClass();
+      }
     } catch (e) {
       if (mounted) {
         _showMessage('Unable to load assigned classes: $e', error: true);
@@ -510,6 +524,12 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
 
       setState(() {
         isSaving = false;
+      });
+
+      await _showAttendanceResult(classInfo);
+
+      if (!mounted) return;
+      setState(() {
         attendance.clear();
       });
 
@@ -665,7 +685,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       return const Expanded(
         child: Center(
           child: Text(
-            'Select one of today\'s classes above.',
+            'Select the current timetable class above.',
             textAlign: TextAlign.center,
           ),
         ),
@@ -683,81 +703,266 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       );
     }
 
-    final visible = filteredStudents;
+    final presentCount = attendance.values.where((value) => value).length;
+    final absentCount = students.length - presentCount;
 
-    return Expanded(
-      child: Column(
-        children: [
-          TextField(
-            controller: searchController,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'Search roll number or student name',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: searchController.text.isEmpty
-                  ? null
-                  : IconButton(
-                onPressed: () {
-                  searchController.clear();
-                  setState(() {});
-                },
-                icon: const Icon(Icons.clear),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(15),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // No search field: the complete class roster is always visible.
+        Row(
+          children: [
+            Expanded(
+              child: _attendanceCountChip(
+                icon: Icons.check_circle,
+                label: 'Present',
+                count: presentCount,
+                iconColor: Colors.green,
+                isDark: isDark,
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView.builder(
-              itemCount: visible.length,
-              itemBuilder: (context, index) {
-                final student = visible[index];
-                final data = student.data();
-                final id = student.id;
+            const SizedBox(width: 8),
+            Expanded(
+              child: _attendanceCountChip(
+                icon: Icons.cancel,
+                label: 'Absent',
+                count: absentCount,
+                iconColor: Colors.red,
+                isDark: isDark,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: students.length,
+          itemBuilder: (context, index) {
+            final student = students[index];
+            final data = student.data();
+            final id = student.id;
 
-                final name = data['name']?.toString() ?? 'Student';
-                final roll = data['rollNumber']?.toString() ?? '';
+            final name = data['name']?.toString() ?? 'Student';
+            final roll = data['rollNumber']?.toString() ?? 'No Roll No';
+            final present = attendance[id] ?? false;
 
-                attendance.putIfAbsent(id, () => false);
-
-                final present = attendance[id] ?? false;
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Text(name.isEmpty ? 'S' : name[0].toUpperCase()),
-                    ),
-                    title: Text(
-                      '$roll - $name',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text(
-                      present ? 'Present' : 'Absent',
-                      style: TextStyle(
-                        color: present ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.w600,
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              elevation: 1,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      child: Text(
+                        roll.isNotEmpty
+                            ? roll.substring(0, 1).toUpperCase()
+                            : 'S',
                       ),
                     ),
-                    trailing: Switch(
-                      value: present,
-                      onChanged: (value) {
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            roll,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isDark
+                                  ? Colors.white70
+                                  : Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Two direct controls on every student.
+                    OutlinedButton(
+                      onPressed: present
+                          ? null
+                          : () {
                         setState(() {
-                          attendance[id] = value;
+                          attendance[id] = true;
                         });
                       },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.green.shade700,
+                        side: BorderSide(color: Colors.green.shade600),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        minimumSize: const Size(0, 40),
+                      ),
+                      child: const Text('Present'),
                     ),
-                  ),
-                );
-              },
+                    const SizedBox(width: 6),
+                    OutlinedButton(
+                      onPressed: present
+                          ? () {
+                        setState(() {
+                          attendance[id] = false;
+                        });
+                      }
+                          : null,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                        side: BorderSide(color: Colors.red.shade600),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        minimumSize: const Size(0, 40),
+                      ),
+                      child: const Text('Absent'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _attendanceCountChip({
+    required IconData icon,
+    required String label,
+    required int count,
+    required Color iconColor,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(.06) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.grey.shade200,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 20),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Text(
+            '$count',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
       ),
     );
   }
+
+  Future<void> _showAttendanceResult(Map<String, dynamic> classInfo) async {
+    final present = attendance.values.where((v) => v).length;
+    final absent = students.length - present;
+    final absentRollNumbers = students
+        .where((student) => !(attendance[student.id] ?? false))
+        .map((student) => student.data()['rollNumber']?.toString() ?? '')
+        .where((roll) => roll.isNotEmpty)
+        .toList();
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Attendance Summary'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${classInfo['subject'] ?? ''}\n'
+                    '${classInfo['startTime'] ?? ''} - ${classInfo['endTime'] ?? ''}',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 14),
+              Text('Total Students: ${students.length}'),
+              Text('Present: $present'),
+              Text('Absent: $absent'),
+              const SizedBox(height: 14),
+              const Text(
+                'Absent Roll Numbers',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                absentRollNumbers.isEmpty
+                    ? 'None — all students are present.'
+                    : absentRollNumbers.join(', '),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> showAttendanceHistory() async {
+    final snapshot = await firestore
+        .collection('attendance_history')
+        .where('teacherId', isEqualTo: teacherId)
+        .get();
+
+    final records = snapshot.docs.toList()
+      ..sort((a, b) {
+        final ad = a.data()['dateKey']?.toString() ?? '';
+        final bd = b.data()['dateKey']?.toString() ?? '';
+        final dateCompare = bd.compareTo(ad);
+        if (dateCompare != 0) return dateCompare;
+
+        final at = a.data()['startTime']?.toString() ?? '';
+        final bt = b.data()['startTime']?.toString() ?? '';
+        return bt.compareTo(at);
+      });
+
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TeacherAttendanceHistoryPage(
+          teacherName: teacherName,
+          records: records,
+        ),
+      ),
+    );
+  }
+
 
   // ---------------------------------------------------------------------
   // Build
@@ -778,16 +983,18 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            tooltip: 'Refresh classes',
-            onPressed: isLoadingClasses ? null : loadTeacherAndClasses,
-            icon: const Icon(Icons.refresh),
+            tooltip: 'Attendance history',
+            onPressed: teacherId.isEmpty ? null : showAttendanceHistory,
+            icon: const Icon(Icons.history),
           ),
         ],
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(18),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _glassCard(
                 isDark: isDark,
@@ -867,10 +1074,47 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
               ),
               const SizedBox(height: 14),
 
+              if (_findCurrentClass(todayClasses) != null) ...[
+                _glassCard(
+                  isDark: isDark,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.play_circle_fill,
+                          color: Colors.green,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Current class: ${_findCurrentClass(todayClasses)?['subject'] ?? ''}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const Text(
+                          'NOW',
+                          style: TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Assigned Classes',
+                  'Today’s Timetable',
                   style: TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -905,6 +1149,8 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                   SizedBox(
                     height: 190,
                     child: ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
                       itemCount: todayClasses.length,
                       itemBuilder: (context, index) {
                         return _buildClassCard(todayClasses[index], isDark);
@@ -924,7 +1170,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '${selected['subject']} • '
+                            'Marking: ${selected['subject']} • '
                                 '${selected['startTime']} - '
                                 '${selected['endTime']} • '
                                 '${_formatHours(selected['hours'])}',
@@ -943,43 +1189,266 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
               if (selected != null)
                 _buildStudents(isDark)
               else
-                const Spacer(),
+                const SizedBox(height: 24),
 
               if (selected != null)
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton.icon(
-                    onPressed: isSaving ? null : saveAttendance,
-                    icon: isSaving
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 56,
+                        child: ElevatedButton.icon(
+                          onPressed: isSaving ? null : saveAttendance,
+                          icon: isSaving
+                              ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : const Icon(Icons.save),
+                          label: Text(
+                            isSaving
+                                ? 'Saving...'
+                                : (selectedDateKey ==
+                                _dateKey(DateTime.now())
+                                ? 'Save Attendance'
+                                : 'Update Attendance'),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1565C0),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                          ),
+                        ),
                       ),
-                    )
-                        : const Icon(Icons.save),
-                    label: Text(
-                      isSaving
-                          ? 'Saving...'
-                          : (selectedDateKey == _dateKey(DateTime.now())
-                          ? 'Save Attendance'
-                          : 'Update Attendance'),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1565C0),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class TeacherAttendanceHistoryPage extends StatelessWidget {
+  final String teacherName;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> records;
+
+  const TeacherAttendanceHistoryPage({
+    super.key,
+    required this.teacherName,
+    required this.records,
+  });
+
+  Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  _groupRecords() {
+    final grouped =
+    <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+
+    for (final record in records) {
+      final data = record.data();
+      final key = [
+        data['dateKey'] ?? '',
+        data['timetableId'] ?? '',
+        data['subject'] ?? '',
+        data['startTime'] ?? '',
+      ].join('|');
+
+      grouped.putIfAbsent(key, () => []).add(record);
+    }
+
+    return grouped;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final groups = _groupRecords();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Attendance History'),
+        backgroundColor: isDark
+            ? const Color(0xFF0D47A1)
+            : const Color(0xFF1565C0),
+        foregroundColor: Colors.white,
+      ),
+      body: records.isEmpty
+          ? const Center(
+        child: Text(
+          'No attendance history found.',
+          textAlign: TextAlign.center,
+        ),
+      )
+          : ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Teacher: $teacherName',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...groups.entries.map((entry) {
+            final group = entry.value;
+            final first = group.first.data();
+
+            final present = group
+                .where((doc) => doc.data()['present'] == true)
+                .length;
+            final absent = group.length - present;
+
+            final absentRolls = group
+                .where((doc) => doc.data()['present'] != true)
+                .map((doc) =>
+            doc.data()['rollNumber']?.toString() ?? '')
+                .where((roll) => roll.isNotEmpty)
+                .toList()
+              ..sort();
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(
+                  16,
+                  0,
+                  16,
+                  16,
+                ),
+                title: Text(
+                  '${first['subject'] ?? 'Subject'} • '
+                      '${first['dateKey'] ?? ''}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                subtitle: Text(
+                  '${first['startTime'] ?? ''} - '
+                      '${first['endTime'] ?? ''} • '
+                      '${first['year'] ?? ''} Year • '
+                      '${first['department'] ?? ''} • '
+                      'Section ${first['section'] ?? ''}',
+                ),
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _historyStat(
+                          'Present',
+                          '$present',
+                          Colors.green,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _historyStat(
+                          'Absent',
+                          '$absent',
+                          Colors.red,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _historyStat(
+                          'Total',
+                          '${group.length}',
+                          Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      absentRolls.isEmpty
+                          ? 'Absent Roll Numbers: None'
+                          : 'Absent Roll Numbers: ${absentRolls.join(', ')}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Divider(),
+                  ...group.map((doc) {
+                    final data = doc.data();
+                    final isPresent = data['present'] == true;
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        isPresent
+                            ? Icons.check_circle
+                            : Icons.cancel,
+                        color: isPresent ? Colors.green : Colors.red,
+                      ),
+                      title: Text(
+                        data['rollNumber']?.toString() ?? '',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      subtitle: Text(
+                        data['studentName']?.toString() ?? 'Student',
+                      ),
+                      trailing: Text(
+                        isPresent ? 'Present' : 'Absent',
+                        style: TextStyle(
+                          color:
+                          isPresent ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _historyStat(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(.35)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ],
       ),
     );
   }
