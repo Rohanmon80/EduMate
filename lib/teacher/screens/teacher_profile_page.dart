@@ -452,9 +452,11 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                           });
                         },
 
-                        icon: const Icon(Icons.photo),
-
-                        label: const Text("Choose Photo"),
+                        label: Text(
+                          profileImage != null || photoUrl.toString().isNotEmpty
+                              ? "Change Photo"
+                              : "Add Profile Photo",
+                        ),
                       ),
 
                       const SizedBox(height: 18),
@@ -558,9 +560,9 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                                   const Duration(seconds: 60),
                                 );
 
-                                imageUrl = supabase.storage
+                                imageUrl = '${supabase.storage
                                     .from("profile-images")
-                                    .getPublicUrl(fileName);
+                                    .getPublicUrl(fileName)}?v=${DateTime.now().millisecondsSinceEpoch}';
                               }
 
                               final Map<String, dynamic> updateData = {

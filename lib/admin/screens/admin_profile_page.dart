@@ -455,9 +455,17 @@ builder: (context, dialogSetState) {
                           });
                         },
 
-                        icon: const Icon(Icons.photo),
+                        icon: Icon(
+                          profileImage != null || photoUrl.toString().isNotEmpty
+                              ? Icons.edit
+                              : Icons.add_a_photo,
+                        ),
 
-                        label: const Text("Choose Photo"),
+                        label: Text(
+                          profileImage != null || photoUrl.toString().isNotEmpty
+                              ? "Change Photo"
+                              : "Add Profile Photo",
+                        ),
                       ),
 
                       const SizedBox(height: 18),
@@ -559,9 +567,9 @@ builder: (context, dialogSetState) {
                                   const Duration(seconds: 60),
                                 );
 
-                                imageUrl = supabase.storage
+                                imageUrl = '${supabase.storage
                                     .from("profile-images")
-                                    .getPublicUrl(fileName);
+                                    .getPublicUrl(fileName)}?v=${DateTime.now().millisecondsSinceEpoch}';
                               }
 
                               final Map<String, dynamic> updateData = {
