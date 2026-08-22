@@ -11,69 +11,50 @@ class ReceiptsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     final bool isDark =
-        Theme.of(context).brightness ==
-            Brightness.dark;
+        Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-
       appBar: AppBar(
-
         backgroundColor: Colors.transparent,
-
         elevation: 0,
-
         leading: IconButton(
-
           icon: const Icon(Icons.arrow_back),
-
           onPressed: () {
-
             Navigator.pop(context);
           },
         ),
       ),
 
-      backgroundColor:
-      isDark
+      backgroundColor: isDark
           ? const Color(0xFF081120)
           : const Color(0xFFF4F8FC),
 
       body: SafeArea(
-
         child: SingleChildScrollView(
-
           padding: const EdgeInsets.all(20),
 
           child: Column(
-            crossAxisAlignment:
-            CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
 
             children: [
-
               /// TOP BAR
               Row(
                 mainAxisAlignment:
                 MainAxisAlignment.spaceBetween,
 
                 children: [
-
                   Column(
                     crossAxisAlignment:
                     CrossAxisAlignment.start,
 
                     children: [
-
                       Text(
                         "Fee Receipts",
-
                         style: TextStyle(
                           fontSize: 38,
                           fontWeight: FontWeight.bold,
-
-                          color:
-                          isDark
+                          color: isDark
                               ? Colors.white
                               : const Color(0xFF0B1736),
                         ),
@@ -83,12 +64,9 @@ class ReceiptsPage extends StatelessWidget {
 
                       Text(
                         "Payments & transactions",
-
                         style: TextStyle(
                           fontSize: 16,
-
-                          color:
-                          isDark
+                          color: isDark
                               ? Colors.white70
                               : Colors.grey,
                         ),
@@ -97,13 +75,11 @@ class ReceiptsPage extends StatelessWidget {
                   ),
 
                   glassIcon(
-                    icon:
-                    isDark
+                    icon: isDark
                         ? Icons.light_mode
                         : Icons.dark_mode,
 
                     onTap: () {
-
                       EduMateApp.of(context)
                           ?.toggleTheme();
                     },
@@ -115,14 +91,11 @@ class ReceiptsPage extends StatelessWidget {
 
               /// SUMMARY CARD
               glassCard(
-
                 isDark: isDark,
-
                 child: Column(
                   crossAxisAlignment:
                   CrossAxisAlignment.start,
-
-
+                  children: const [],
                 ),
               ),
 
@@ -130,172 +103,112 @@ class ReceiptsPage extends StatelessWidget {
 
               Text(
                 "Payment History",
-
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-
-                  color:
-                  isDark
+                  color: isDark
                       ? Colors.white
                       : Colors.black,
                 ),
               ),
 
-              StreamBuilder<
-                  DocumentSnapshot>(
+              const SizedBox(height: 20),
 
-                stream:
-
-                FirebaseFirestore
+              /// PAYMENT HISTORY
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore
                     .instance
-
-                    .collection(
-                    "users")
-
+                    .collection("users")
                     .doc(
-
-                    FirebaseAuth
-                        .instance
-                        .currentUser!
-                        .uid)
-
+                  FirebaseAuth
+                      .instance
+                      .currentUser!
+                      .uid,
+                )
                     .snapshots(),
 
-                builder:
-                    (context,userSnap){
-
-                  if(
-                  !userSnap.hasData
-                  ){
-
+                builder: (context, userSnap) {
+                  if (!userSnap.hasData) {
                     return const SizedBox();
                   }
 
-                  final student=
+                  final student =
+                  userSnap.data!.data()
+                  as Map<String, dynamic>;
 
-                  userSnap.data!
-                      .data()
-
-                  as Map<
-                      String,
-                      dynamic>;
-
-                  return StreamBuilder<
-                      QuerySnapshot>(
-
-                    stream:
-
-                    FirebaseFirestore
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore
                         .instance
-
-                        .collection(
-                        "fee_receipts")
-
+                        .collection("fee_receipts")
                         .where(
-
-                        "rollNumber",
-
-                        isEqualTo:
-
-                        student[
-                        "rollNumber"
-                        ])
-
+                      "rollNumber",
+                      isEqualTo:
+                      student["rollNumber"],
+                    )
                         .snapshots(),
 
-                    builder:
-                        (context,snapshot){
-
-                      if(
-                      !snapshot.hasData
-                      ){
-
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
                         return const SizedBox();
                       }
 
-                      final receipts=
+                      final receipts =
+                          snapshot.data!.docs;
 
-                          snapshot
-                              .data!
-                              .docs;
+                      if (receipts.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Center(
+                            child: Text(
+                              "No payment records available",
+                            ),
+                          ),
+                        );
+                      }
 
                       return Column(
-
                         children:
+                        receipts.map((e) {
+                          final r =
+                          e.data()
+                          as Map<String, dynamic>;
 
-                        receipts.map(
+                          return receiptTile(
+                            isDark: isDark,
 
-                              (e){
+                            receiptUrl:
+                            r["receiptUrl"] ?? "",
 
-                            final r=
+                            title:
+                            r["title"] ??
+                                "Fee Payment",
 
-                            e.data()
+                            amount:
+                            "₹${r["amount"] ?? 0}",
 
-                            as Map<
-                                String,
-                                dynamic>;
+                            status:
+                            r["status"] ??
+                                "PENDING",
 
-                            return receiptTile(
+                            date:
+                            r["date"] ??
+                                "",
 
-                              isDark:
-                              isDark,
+                            paymentMode:
+                            r["paymentMode"] ??
+                                "N/A",
 
-                              receiptUrl:
+                            transactionId:
+                            r["transactionId"] ??
+                                "N/A",
 
-                              r[
-                              "receiptUrl"
-                              ] ?? "",
-
-                              title:
-
-                              r[
-                              "title"
-                              ],
-
-                              amount:
-
-                              "₹${r["amount"]}",
-
-                              status:
-
-                              r[
-                              "status"
-                              ],
-
-                              date:
-
-                              r[
-                              "date"
-                              ],
-
-                              paymentMode:
-                              r["paymentMode"],
-
-                              transactionId:
-
-                              r[
-                              "transactionId"
-                              ],
-
-                              color:
-
-                              r[
-                              "status"
-                              ]
-
-                                  =="PAID"
-
-                                  ?
-
-                              Colors.green
-
-                                  :
-
-                              Colors.redAccent,
-                            );
-                          },
-                        ).toList(),
+                            color:
+                            r["status"] ==
+                                "PAID"
+                                ? Colors.green
+                                : Colors.redAccent,
+                          );
+                        }).toList(),
                       );
                     },
                   );
@@ -304,161 +217,97 @@ class ReceiptsPage extends StatelessWidget {
 
               const SizedBox(height: 20),
 
+              /// PAID / PENDING SUMMARY
               StreamBuilder<DocumentSnapshot>(
-
-                stream:
-
-                FirebaseFirestore
+                stream: FirebaseFirestore
                     .instance
-
-                    .collection(
-                    "users")
-
+                    .collection("users")
                     .doc(
-
-                    FirebaseAuth
-                        .instance
-                        .currentUser!
-                        .uid)
-
+                  FirebaseAuth
+                      .instance
+                      .currentUser!
+                      .uid,
+                )
                     .snapshots(),
 
-                builder:
-                    (context,userSnap){
-
-                  if(
-                  !userSnap.hasData ||
-
-                      !userSnap.data!
-                          .exists
-                  ){
-
+                builder: (context, userSnap) {
+                  if (!userSnap.hasData ||
+                      !userSnap.data!.exists) {
                     return const SizedBox();
                   }
 
-                  final student=
+                  final student =
+                  userSnap.data!.data()
+                  as Map<String, dynamic>;
 
-                  userSnap.data!
-                      .data()
-
-                  as Map<
-                      String,
-                      dynamic>;
-
-                  return StreamBuilder<
-                      QuerySnapshot>(
-
-                    stream:
-
-                    FirebaseFirestore
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore
                         .instance
-
-                        .collection(
-                        "fee_receipts")
-
+                        .collection("fee_receipts")
                         .where(
-
-                        "rollNumber",
-
-                        isEqualTo:
-
-                        student[
-                        "rollNumber"
-                        ])
-
+                      "rollNumber",
+                      isEqualTo:
+                      student["rollNumber"],
+                    )
                         .snapshots(),
 
-                    builder:
-                        (context,snapshot){
-
-                      if(
-                      !snapshot.hasData
-                      ){
-
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
                         return const SizedBox();
                       }
 
-                      double paid=0;
+                      double paid = 0;
+                      double pending = 0;
 
-                      double pending=0;
-
-                      for(
-
-                      var d
-
-                      in snapshot
-                          .data!
-                          .docs
-
-                      ){
-
-                        final data=
-
+                      for (final d
+                      in snapshot.data!.docs) {
+                        final data =
                         d.data()
+                        as Map<String, dynamic>;
 
-                        as Map<
-                            String,
-                            dynamic>;
+                        final amount =
+                        (data["amount"] ?? 0)
+                            .toDouble();
 
-                        paid +=
+                        final status =
+                        (data["status"] ?? "")
+                            .toString()
+                            .toUpperCase();
 
-                            (data[
-                            "amount"
-                            ] ??0)
+                        final pendingAmount =
+                        (data["pending"] ?? 0)
+                            .toDouble();
 
-                                .toDouble();
+                        // Only PAID records contribute
+                        // to Paid amount.
+                        if (status == "PAID") {
+                          paid += amount;
+                        }
 
-                        pending =
-
-                            (data[
-                            "pending"
-                            ]
-
-                                ??
-
-                                0)
-                                .toDouble();
+                        // Pending amount comes from
+                        // the pending field.
+                        pending += pendingAmount;
                       }
 
                       return Row(
-
-                        children:[
-
+                        children: [
                           Expanded(
-
-                            child:
-
-                            amountBox(
-
-                              title:
-                              "Paid",
-
+                            child: amountBox(
+                              title: "Paid",
                               value:
                               "₹${paid.toStringAsFixed(0)}",
-
-                              color:
-                              Colors.green,
+                              color: Colors.green,
                             ),
                           ),
 
-                          const SizedBox(
-                            width:16,
-                          ),
+                          const SizedBox(width: 16),
 
                           Expanded(
-
-                            child:
-
-                            amountBox(
-
-                              title:
-                              "Pending",
-
+                            child: amountBox(
+                              title: "Pending",
                               value:
                               "₹${pending.toStringAsFixed(0)}",
-
-                              color:
-                              Colors.redAccent,
+                              color: Colors.redAccent,
                             ),
                           ),
                         ],
@@ -476,15 +325,15 @@ class ReceiptsPage extends StatelessWidget {
                 height: 62,
 
                 child: ElevatedButton(
-
                   onPressed: () {},
 
-                  style: ElevatedButton.styleFrom(
-
+                  style:
+                  ElevatedButton.styleFrom(
                     backgroundColor:
                     const Color(0xFF008CFF),
 
-                    shape: RoundedRectangleBorder(
+                    shape:
+                    RoundedRectangleBorder(
                       borderRadius:
                       BorderRadius.circular(22),
                     ),
@@ -492,10 +341,10 @@ class ReceiptsPage extends StatelessWidget {
 
                   child: const Text(
                     "Pay Pending Fees",
-
                     style: TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontWeight:
+                      FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
@@ -514,36 +363,33 @@ class ReceiptsPage extends StatelessWidget {
     required bool isDark,
     required Widget child,
   }) {
-
     return ClipRRect(
-
       borderRadius:
       BorderRadius.circular(30),
 
       child: BackdropFilter(
-
         filter: ImageFilter.blur(
           sigmaX: 20,
           sigmaY: 20,
         ),
 
         child: Container(
-
-          padding: const EdgeInsets.all(24),
+          padding:
+          const EdgeInsets.all(24),
 
           decoration: BoxDecoration(
-
-            color:
-            isDark
-                ? Colors.white.withOpacity(0.08)
-                : Colors.white.withOpacity(0.35),
+            color: isDark
+                ? Colors.white
+                .withOpacity(0.08)
+                : Colors.white
+                .withOpacity(0.35),
 
             borderRadius:
             BorderRadius.circular(30),
 
             border: Border.all(
-              color:
-              Colors.white.withOpacity(0.2),
+              color: Colors.white
+                  .withOpacity(0.2),
             ),
           ),
 
@@ -558,29 +404,24 @@ class ReceiptsPage extends StatelessWidget {
     required String value,
     required Color color,
   }) {
-
     return Container(
-
-      padding: const EdgeInsets.all(20),
+      padding:
+      const EdgeInsets.all(20),
 
       decoration: BoxDecoration(
-        color:
-        color.withOpacity(0.15),
-
+        color: color.withOpacity(0.15),
         borderRadius:
         BorderRadius.circular(22),
       ),
 
       child: Column(
-
         children: [
-
           Text(
             title,
-
             style: TextStyle(
               color: color,
-              fontWeight: FontWeight.bold,
+              fontWeight:
+              FontWeight.bold,
             ),
           ),
 
@@ -588,10 +429,10 @@ class ReceiptsPage extends StatelessWidget {
 
           Text(
             value,
-
             style: TextStyle(
               fontSize: 24,
-              fontWeight: FontWeight.bold,
+              fontWeight:
+              FontWeight.bold,
               color: color,
             ),
           ),
@@ -611,12 +452,11 @@ class ReceiptsPage extends StatelessWidget {
     required String transactionId,
     required Color color,
   }) {
-
     return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
+      padding:
+      const EdgeInsets.only(bottom: 18),
 
       child: glassCard(
-
         isDark: isDark,
 
         child: Column(
@@ -624,21 +464,21 @@ class ReceiptsPage extends StatelessWidget {
           CrossAxisAlignment.start,
 
           children: [
-
             Row(
-
               children: [
-
                 Container(
                   width: 58,
                   height: 58,
 
-                  decoration: BoxDecoration(
+                  decoration:
+                  BoxDecoration(
                     color:
-                    color.withOpacity(0.15),
+                    color.withOpacity(
+                        0.15),
 
                     borderRadius:
-                    BorderRadius.circular(18),
+                    BorderRadius.circular(
+                        18),
                   ),
 
                   child: Icon(
@@ -655,16 +495,13 @@ class ReceiptsPage extends StatelessWidget {
                     CrossAxisAlignment.start,
 
                     children: [
-
                       Text(
                         title,
-
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
-
-                          color:
-                          isDark
+                          fontWeight:
+                          FontWeight.bold,
+                          color: isDark
                               ? Colors.white
                               : Colors.black,
                         ),
@@ -674,10 +511,8 @@ class ReceiptsPage extends StatelessWidget {
 
                       Text(
                         date,
-
                         style: TextStyle(
-                          color:
-                          isDark
+                          color: isDark
                               ? Colors.white70
                               : Colors.grey,
                         ),
@@ -687,27 +522,29 @@ class ReceiptsPage extends StatelessWidget {
                 ),
 
                 Container(
-
                   padding:
                   const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 10,
                   ),
 
-                  decoration: BoxDecoration(
+                  decoration:
+                  BoxDecoration(
                     color:
-                    color.withOpacity(0.15),
+                    color.withOpacity(
+                        0.15),
 
                     borderRadius:
-                    BorderRadius.circular(18),
+                    BorderRadius.circular(
+                        18),
                   ),
 
                   child: Text(
                     status,
-
                     style: TextStyle(
                       color: color,
-                      fontWeight: FontWeight.bold,
+                      fontWeight:
+                      FontWeight.bold,
                     ),
                   ),
                 ),
@@ -718,79 +555,62 @@ class ReceiptsPage extends StatelessWidget {
 
             Row(
               mainAxisAlignment:
-              MainAxisAlignment.spaceBetween,
+              MainAxisAlignment
+                  .spaceBetween,
 
               children: [
-
                 Text(
                   amount,
-
                   style: TextStyle(
                     fontSize: 26,
-                    fontWeight: FontWeight.bold,
-
-                    color:
-                    isDark
+                    fontWeight:
+                    FontWeight.bold,
+                    color: isDark
                         ? Colors.white
                         : Colors.black,
                   ),
                 ),
 
-                GestureDetector(
+                if (receiptUrl
+                    .trim()
+                    .isNotEmpty)
+                  GestureDetector(
+                    onTap: () async {
+                      await launchUrl(
+                        Uri.parse(
+                          receiptUrl,
+                        ),
+                      );
+                    },
 
-                  onTap: () async {
-
-                    await launchUrl(
-
-                      Uri.parse(
-                        receiptUrl,
+                    child: Container(
+                      padding:
+                      const EdgeInsets
+                          .symmetric(
+                        horizontal: 16,
+                        vertical: 10,
                       ),
-                    );
-                  },
 
-                  child:
+                      decoration:
+                      BoxDecoration(
+                        color: Colors.blue
+                            .withOpacity(
+                            0.15),
 
-                  Container(
+                        borderRadius:
+                        BorderRadius
+                            .circular(18),
+                      ),
 
-                    padding:
-
-                    const EdgeInsets
-                        .symmetric(
-
-                      horizontal:16,
-
-                      vertical:10,
-                    ),
-
-                    decoration:
-                    BoxDecoration(
-
-                      color:
-
-                      Colors.blue
-                          .withOpacity(
-                          0.15),
-
-                      borderRadius:
-
-                      BorderRadius.circular(
-                          18),
-                    ),
-
-                    child:
-                    const Text(
-
-                      "Download",
-
-                      style:
-                      TextStyle(
-
-                        color:
-                        Colors.blue,
+                      child: const Text(
+                        "Download",
+                        style: TextStyle(
+                          color:
+                          Colors.blue,
+                        ),
                       ),
                     ),
                   ),
-                )
               ],
             ),
 
@@ -798,33 +618,20 @@ class ReceiptsPage extends StatelessWidget {
 
             Text(
               "Transaction ID: $transactionId",
-
               style: TextStyle(
-                color:
-                isDark
+                color: isDark
                     ? Colors.white54
                     : Colors.grey,
               ),
             ),
 
-            const SizedBox(
-              height:6,
-            ),
+            const SizedBox(height: 6),
 
             Text(
-
               "Mode: $paymentMode",
-
-              style:
-
-              TextStyle(
-
-                color:
-
-                isDark
-
+              style: TextStyle(
+                color: isDark
                     ? Colors.white70
-
                     : Colors.grey,
               ),
             ),
@@ -838,18 +645,14 @@ class ReceiptsPage extends StatelessWidget {
     required IconData icon,
     VoidCallback? onTap,
   }) {
-
     return GestureDetector(
-
       onTap: onTap,
 
       child: ClipRRect(
-
         borderRadius:
         BorderRadius.circular(18),
 
         child: BackdropFilter(
-
           filter: ImageFilter.blur(
             sigmaX: 15,
             sigmaY: 15,
@@ -859,12 +662,15 @@ class ReceiptsPage extends StatelessWidget {
             width: 58,
             height: 58,
 
-            decoration: BoxDecoration(
-
-              color: Colors.white.withOpacity(0.12),
+            decoration:
+            BoxDecoration(
+              color:
+              Colors.white.withOpacity(
+                  0.12),
 
               borderRadius:
-              BorderRadius.circular(18),
+              BorderRadius.circular(
+                  18),
 
               border: Border.all(
                 color: Colors.white24,
