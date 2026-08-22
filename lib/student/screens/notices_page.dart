@@ -589,63 +589,23 @@ class NoticesPage extends StatelessWidget {
 
               /// BOTTOM ROW
               Row(
-                mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
-
                 children: [
-
-                  Row(
-                    children: [
-
-                      Icon(
-                        Icons.access_time,
-
-                        size: 18,
-
-                        color:
-                        isDark
-                            ? Colors.white54
-                            : Colors.grey,
-                      ),
-
-                      const SizedBox(width: 6),
-
-                      Text(
-                        date,
-
-                        style: TextStyle(
-                          color:
-                          isDark
-                              ? Colors.white54
-                              : Colors.grey,
-                        ),
-                      ),
-                    ],
+                  Icon(
+                    Icons.access_time,
+                    size: 18,
+                    color: isDark
+                        ? Colors.white54
+                        : Colors.grey,
                   ),
 
-                  Container(
+                  const SizedBox(width: 6),
 
-                    padding:
-                    const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-
-                    decoration: BoxDecoration(
-                      color:
-                      color.withOpacity(0.15),
-
-                      borderRadius:
-                      BorderRadius.circular(18),
-                    ),
-
-                    child: Text(
-                      "View PDF",
-
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  Text(
+                    date,
+                    style: TextStyle(
+                      color: isDark
+                          ? Colors.white54
+                          : Colors.grey,
                     ),
                   ),
                 ],
