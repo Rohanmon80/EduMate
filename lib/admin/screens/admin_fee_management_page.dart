@@ -862,24 +862,18 @@ class _AdminFeeManagementPageState
 
                           "amount": paidNow,
 
-                          "status":
-                          remaining <= 0
-                              ? "PAID"
-                              : "PENDING",
+                          "status": "PAID",
 
-                          "date":
-                          DateTime.now()
+                          "date": DateTime.now()
                               .toString()
                               .substring(0, 10),
 
-                          "paymentMode":
-                          modeController.text,
+                          "paymentMode": modeController.text,
 
                           "transactionId":
                           transactionController.text,
 
-                          "pending":
-                          remaining,
+                          "pending": 0,
                         });
 
                         await FirebaseFirestore
