@@ -34,7 +34,9 @@ class ExcelService {
       final path = pickedFile.path;
 
       if (path == null || path.isEmpty) {
-        throw Exception("Excel file path is not available.");
+        throw Exception(
+          "Excel file path is not available.",
+        );
       }
 
       bytes = await File(path).readAsBytes();
@@ -48,50 +50,46 @@ class ExcelService {
       "EXCEL: file read successfully. Bytes = ${bytes.length}",
     );
 
-    late Excel excel;
-
     try {
-      excel = Excel.decodeBytes(bytes);
+      // IMPORTANT:
+      // Do NOT use Excel.decodeBytes().
+      //
+      // The excel_community parser is crashing on the
+      // uploaded XLSX workbook.
+      //
+      // Use the same safe XLSX reader used by timetable import.
+
+      final rows = _decodeTimetableXlsx(bytes);
+
+      if (rows.isEmpty) {
+        throw Exception(
+          "The Excel file contains no rows.",
+        );
+      }
+
+      debugPrint(
+        "EXCEL: ${rows.length} rows loaded successfully.",
+      );
+
+      return rows;
     } catch (e, stackTrace) {
-      debugPrint("EXCEL DECODE ERROR: $e");
-      debugPrintStack(stackTrace: stackTrace);
+      debugPrint(
+        "EXCEL READ ERROR: $e",
+      );
+
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+
+      if (e is Exception) {
+        rethrow;
+      }
 
       throw Exception(
-        "Excel workbook could not be opened. "
-            "Please make sure the file is a valid .xlsx file.",
+        "Unable to read the Excel file. "
+            "Please make sure it is a valid .xlsx workbook.",
       );
     }
-
-    if (excel.tables.isEmpty) {
-      throw Exception(
-        "The Excel workbook does not contain any worksheet.",
-      );
-    }
-
-    final sheetName = excel.tables.keys.first;
-    final sheet = excel.tables[sheetName];
-
-    if (sheet == null) {
-      throw Exception("Unable to read the first Excel worksheet.");
-    }
-
-    final rows = <List<dynamic>>[];
-
-    for (final row in sheet.rows) {
-      rows.add(
-        row.map((cell) => cell?.value).toList(),
-      );
-    }
-
-    if (rows.isEmpty) {
-      throw Exception("The Excel file contains no rows.");
-    }
-
-    debugPrint(
-      "EXCEL: ${rows.length} rows loaded successfully.",
-    );
-
-    return rows;
   }
 
 
