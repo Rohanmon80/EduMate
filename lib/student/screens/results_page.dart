@@ -16,6 +16,30 @@ class _SemesterResultsPageState extends State<SemesterResultsPage> {
   static const int totalSemesters = 8;
 
   int selectedSemester = 1;
+  Future<int> _getStudentSemester() async {
+    final uid = studentId;
+
+    if (uid == null) {
+      return 1;
+    }
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+
+    final data = doc.data();
+
+    final semester = (data?['semester'] as num?)?.toInt();
+
+    if (semester != null &&
+        semester >= 1 &&
+        semester <= totalSemesters) {
+      return semester;
+    }
+
+    return 1;
+  }
   late Future<List<_SemesterSummary>> _summaryFuture;
 
   String? get studentId => FirebaseAuth.instance.currentUser?.uid;
@@ -23,7 +47,18 @@ class _SemesterResultsPageState extends State<SemesterResultsPage> {
   @override
   void initState() {
     super.initState();
-    _summaryFuture = _loadAllSemesterSummaries();
+    _summaryFuture = _initializeResults();
+  }
+  Future<List<_SemesterSummary>> _initializeResults() async {
+    final currentSemester = await _getStudentSemester();
+
+    if (mounted) {
+      setState(() {
+        selectedSemester = currentSemester;
+      });
+    }
+
+    return _loadAllSemesterSummaries();
   }
 
   Future<void> _refresh() async {
@@ -1512,7 +1547,8 @@ class _SemesterResultsPageState extends State<SemesterResultsPage> {
                   constraints,
                   ) {
                 // Exactly 10 subject slots.
-                const int subjectCount = 10;
+                final int subjectCount =
+                math.max(selected.subjects.length, 1);
 
                 final chartWidth = math.max(
                   constraints.maxWidth,
@@ -2220,7 +2256,8 @@ class _SubjectChartPainter extends CustomPainter {
     // ALWAYS CREATE 10 SUBJECT SLOTS
     // ============================================================
 
-    const int subjectCount = 10;
+    final int subjectCount =
+    math.max(subjects.length, 1);
 
     final double slotWidth =
         chartWidth / subjectCount;
