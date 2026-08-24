@@ -571,46 +571,8 @@ class ReceiptsPage extends StatelessWidget {
                   ),
                 ),
 
-                if (receiptUrl
-                    .trim()
-                    .isNotEmpty)
-                  GestureDetector(
-                    onTap: () async {
-                      await launchUrl(
-                        Uri.parse(
-                          receiptUrl,
-                        ),
-                      );
-                    },
 
-                    child: Container(
-                      padding:
-                      const EdgeInsets
-                          .symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
 
-                      decoration:
-                      BoxDecoration(
-                        color: Colors.blue
-                            .withOpacity(
-                            0.15),
-
-                        borderRadius:
-                        BorderRadius
-                            .circular(18),
-                      ),
-
-                      child: const Text(
-                        "Download",
-                        style: TextStyle(
-                          color:
-                          Colors.blue,
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
 
