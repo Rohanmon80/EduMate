@@ -37,36 +37,20 @@ class _StudentDashboardPageState
     }
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection("attendance")
-          .where(
-        "studentId",
-        isEqualTo: studentId,
-      )
-          .get();
+      final academicYear =
+          user["academicYear"]?.toString() ??
+              "2026-2027";
 
-      if (snapshot.docs.isEmpty) {
-        return 0.0;
-      }
+      final semester =
+          user["semester"]?.toString() ??
+              "6";
 
-      int totalClasses = 0;
-      int attendedClasses = 0;
-
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-
-        totalClasses++;
-
-        if (data["present"] == true) {
-          attendedClasses++;
-        }
-      }
-
-      if (totalClasses == 0) {
-        return 0.0;
-      }
-
-      return (attendedClasses / totalClasses) * 100;
+      return await _attendanceService
+          .getSemesterPercentage(
+        studentId: studentId,
+        academicYear: academicYear,
+        semester: semester,
+      );
     } catch (e) {
       debugPrint(
         "Dashboard attendance error: $e",

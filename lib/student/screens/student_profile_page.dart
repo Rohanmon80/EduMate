@@ -3,7 +3,7 @@ import 'dart:io';
 import '../../settings/privacy_security_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../services/attendance_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -26,8 +26,138 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   final sectionController = TextEditingController();
 
   final bioController = TextEditingController();
+  final AttendanceService attendanceService = AttendanceService();
 
   File? profileImage;
+  Future<double> _getProfileAttendance(
+      String studentId,
+      Map<String, dynamic> user,
+      ) async {
+    try {
+      String academicYear =
+          user["academicYear"]?.toString() ??
+              user["session"]?.toString() ??
+              user["batch"]?.toString() ??
+              "";
+
+      String semester =
+          user["semester"]?.toString() ??
+              user["currentSemester"]?.toString() ??
+              "";
+
+      final studentYear = user["year"]?.toString() ?? "";
+      final department =
+          user["department"]?.toString() ??
+              user["branch"]?.toString() ??
+              user["course"]?.toString() ??
+              "";
+      final section = user["section"]?.toString() ?? "";
+
+      Map<String, dynamic>? config;
+
+      // First try the exact academic year + semester.
+      if (academicYear.isNotEmpty && semester.isNotEmpty) {
+        final configDoc = await FirebaseFirestore.instance
+            .collection("attendance_config")
+            .doc("${academicYear}_$semester")
+            .get();
+
+        if (configDoc.exists) {
+          config = configDoc.data();
+        }
+      }
+
+      // Same fallback logic as AttendancePage.
+      if (config == null && studentYear.isNotEmpty) {
+        Query<Map<String, dynamic>> query =
+        FirebaseFirestore.instance
+            .collection("attendance_config")
+            .where("year", isEqualTo: studentYear);
+
+        if (department.isNotEmpty) {
+          query = query.where(
+            "department",
+            isEqualTo: department,
+          );
+        }
+
+        if (section.isNotEmpty) {
+          query = query.where(
+            "section",
+            isEqualTo: section,
+          );
+        }
+
+        final snapshot = await query.limit(20).get();
+
+        if (snapshot.docs.isNotEmpty) {
+          QueryDocumentSnapshot<Map<String, dynamic>>? selected;
+
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+
+            if (data["active"] == true) {
+              selected = doc;
+              break;
+            }
+          }
+
+          selected ??= snapshot.docs.first;
+          config = selected.data();
+        }
+      }
+
+      if (config != null) {
+        final configYear =
+            config["academicYear"]?.toString() ?? "";
+        final configSemester =
+            config["semester"]?.toString() ?? "";
+
+        if (configYear.isNotEmpty) {
+          academicYear = configYear;
+        }
+
+        if (configSemester.isNotEmpty) {
+          semester = configSemester;
+        }
+
+        if (config["active"] != true) {
+          return 0.0;
+        }
+      }
+
+      if (academicYear.isEmpty || semester.isEmpty) {
+        return 0.0;
+      }
+
+      final summary =
+      await attendanceService.getSemesterSummary(
+        studentId: studentId,
+        academicYear: academicYear,
+        semester: semester,
+      );
+
+      final percentage = summary["percentage"];
+
+      if (percentage is num) {
+        return percentage.toDouble();
+      }
+
+      return double.tryParse(
+        percentage?.toString() ?? "",
+      ) ??
+          0.0;
+    } catch (e, stackTrace) {
+      debugPrint(
+        "PROFILE ATTENDANCE ERROR: $e",
+      );
+      debugPrint(
+        stackTrace.toString(),
+      );
+
+      return 0.0;
+    }
+  }
 
   @override
   void dispose() {
@@ -207,10 +337,21 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       const SizedBox(width: 12),
 
                       Expanded(
-                        child: statCard(
-                          isDark,
-                          "Attend.",
-                          "${user["attendance"]  ?? 0}%",
+                        child: FutureBuilder<double>(
+                          future: _getProfileAttendance(
+                            data.id,
+                            user,
+                          ),
+                          builder: (context, attendanceSnapshot) {
+                            final attendance =
+                                attendanceSnapshot.data ?? 0.0;
+
+                            return statCard(
+                              isDark,
+                              "Attend.",
+                              "${attendance.toStringAsFixed(1)}%",
+                            );
+                          },
                         ),
                       ),
 
